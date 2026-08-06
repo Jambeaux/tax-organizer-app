@@ -1,0 +1,41 @@
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import PortalDashboard from "./PortalDashboard";
+
+export default async function DashboardPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  return (
+    <div className="container">
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "1.5rem",
+        }}
+      >
+        <div>
+          <h1 style={{ fontSize: "1.3rem", margin: 0 }}>Your documents</h1>
+          <p style={{ fontSize: "0.85rem", color: "#5f5e5a", margin: "4px 0 0" }}>
+            Signed in as {user.email}
+          </p>
+        </div>
+        <form action="/auth/signout" method="post">
+          <button className="btn btn-outline" type="submit">
+            Sign out
+          </button>
+        </form>
+      </div>
+
+      <PortalDashboard userId={user.id} />
+    </div>
+  );
+}
