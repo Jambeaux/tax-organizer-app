@@ -61,7 +61,7 @@ export async function POST(request: Request) {
         name: user.email!,
       },
     ],
-    files: [fileBuffer],
+    files: [fileBuffer as any],
     testMode: !isLive,
   };
 
