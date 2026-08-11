@@ -28,11 +28,10 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
-  const path = `${user.id}/${documentName}`;
-
+  const storagePath = `${user.id}/${documentName}`;
   const { data: fileBlob, error: downloadError } = await admin.storage
-    .from("documents")
-    .download(path);
+  .from("documents")
+  .download(storagePath);
 
   if (downloadError || !fileBlob) {
     return NextResponse.json(
@@ -68,7 +67,7 @@ const fileStream = fs.createReadStream(tmpPath);
         name: user.email!,
       },
     ],
-    files: [fileBuffer as any],
+    files: [fileStream],
     testMode: !isLive,
   };
 
