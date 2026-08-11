@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import * as DropboxSign from "@dropbox/sign";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import fs from "fs";
+import os from "os";
+import path from "path";
 
 // Sends an existing document (already sitting in the client's Storage
 // folder) out for e-signature via Dropbox Sign, and logs the request so
@@ -38,7 +41,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const fileBuffer = Buffer.from(await fileBlob.arrayBuffer());
+
+const fileBuffer = Buffer.from(await fileBlob.arrayBuffer());
+const tmpPath = path.join(os.tmpdir(), `${user.id}-${documentName}`);
+fs.writeFileSync(tmpPath, fileBuffer);
+const fileStream = fs.createReadStream(tmpPath);
 
   const isLive = process.env.DROPBOX_SIGN_MODE === "live";
   const apiKey = isLive
