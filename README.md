@@ -8,8 +8,8 @@ see their own files — enforced at the database level, not just in the app.
 
 - Next.js (App Router) — the web app
 - Supabase — login and secure document storage
-- Dropbox Sign — e-signature (not wired up yet, milestone 2)
-- Square — payments (not wired up yet, milestone 3)
+- Dropbox Sign — e-signature (milestone 2)
+- Square — payments (milestone 3)
 - Vercel — hosting, at portal.jlbtax.com
 
 ## One-time setup
@@ -78,14 +78,50 @@ confirm the format matches, before tightening it to reject bad requests.
 It stays in `DROPBOX_SIGN_MODE=test` (sandbox, no real signatures) until
 you deliberately switch it to `live` in your environment variables.
 
+## Milestone 3 — invoicing and payment (Square)
+
+Clients can now see invoices on their dashboard and pay them through a
+Square-hosted checkout page. There's no "create invoice" button yet — for
+now, you create one by hand:
+
+1. **Run the third migration.** In Supabase SQL Editor, run everything in
+   `supabase/schema_payments.sql`. This adds the `payment_requests` table.
+2. **Create an invoice manually.** In Supabase's Table Editor (or SQL
+   Editor), insert a row into `payment_requests` with the client's
+   `user_id`, a `description` (e.g. "Tax prep — 2025 return"), and
+   `amount_cents` (dollars x 100, so $450.00 = `45000`). It'll show up on
+   that client's dashboard with a "Pay now" button.
+3. **Add your Square credentials.** In `.env.local` (and later in Vercel's
+   Environment Variables), fill in:
+   - `SQUARE_SANDBOX_ACCESS_TOKEN` — from your Square Developer Dashboard,
+     Sandbox tab.
+   - `SQUARE_SANDBOX_LOCATION_ID` — also in the Sandbox tab (Locations).
+   - `SQUARE_SANDBOX_SIGNATURE_KEY` — created in the next step.
+   It stays in `SQUARE_MODE=test` (sandbox, no real charges) until you
+   deliberately switch it to `live`, same pattern as Dropbox Sign.
+4. **Add a webhook in Square.** Once deployed, go to Square Developer
+   Dashboard > your app > Webhooks > Add Endpoint, set the URL to
+   `https://portal.jlbtax.com/api/pay/webhook`, and subscribe to the
+   `payment.updated` event. Square will give you a signature key when you
+   save it — that's the value for `SQUARE_SANDBOX_SIGNATURE_KEY` (or
+   `SQUARE_PRODUCTION_SIGNATURE_KEY` once you're live).
+
+Same honest flag as the Dropbox Sign webhook: this hasn't been verified
+against a real Square callback yet. The signature check in
+`src/app/api/pay/webhook/route.ts` currently logs a warning instead of
+rejecting on mismatch, so you can watch the server logs the first time a
+real payment event comes through and confirm it matches before tightening
+it to reject bad requests.
+
 ## Roadmap
 
 - [x] Milestone 1 — login, dashboard, secure document upload/download
 - [x] Milestone 2 — e-signature via Dropbox Sign (needs live testing — see above)
-- [ ] Milestone 3 — invoicing and payment via Square
+- [x] Milestone 3 — invoicing and payment via Square (needs live testing — see above)
 - [ ] Milestone 4 — the actual tax organizer questionnaire
 - [ ] Milestone 5 — security review before real client data goes through it
 - [ ] "Get started" button on the main site links here
+- [ ] A real "create invoice" UI for staff, instead of inserting rows by hand
 
 ## A note on security
 
