@@ -4,6 +4,7 @@ import { useState } from "react";
 import DocumentManager from "./DocumentManager";
 import SignatureRequests from "./SignatureRequests";
 import PaymentRequests from "./PaymentRequests";
+import TaxOrganizer from "./TaxOrganizer";
 
 export default function PortalDashboard({ userId }: { userId: string }) {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -16,6 +17,7 @@ export default function PortalDashboard({ userId }: { userId: string }) {
       />
       <SignatureRequests userId={userId} refreshKey={refreshKey} />
       <PaymentRequests userId={userId} refreshKey={refreshKey} />
+      <TaxOrganizer userId={userId} />
     </>
   );
 }

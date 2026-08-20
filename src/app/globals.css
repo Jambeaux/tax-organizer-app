@@ -54,12 +54,55 @@ a {
 
 input[type="email"],
 input[type="text"],
-input[type="file"] {
+input[type="date"],
+input[type="file"],
+textarea,
+select {
   width: 100%;
   padding: 0.6rem;
   border: 1px solid var(--gray);
   border-radius: 6px;
   font-size: 0.95rem;
+  font-family: inherit;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 4.5rem;
+}
+
+.field-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+
+.field-group {
+  margin-bottom: 1rem;
+}
+
+.section-title {
+  font-weight: 600;
+  font-size: 1rem;
+  margin: 0 0 1rem;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  padding: 0.35rem 0;
+}
+
+.checkbox-row input {
+  width: auto;
+}
+
+.save-status {
+  font-size: 0.8rem;
+  color: #5f5e5a;
 }
 
 .container {

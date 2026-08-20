@@ -113,15 +113,43 @@ rejecting on mismatch, so you can watch the server logs the first time a
 real payment event comes through and confirm it matches before tightening
 it to reject bad requests.
 
+## Milestone 4 — tax organizer questionnaire
+
+Clients now have a "Tax organizer" section on their dashboard: a living
+intake form (personal/filing info, dependents, income sources,
+deductions, life changes, and general notes) that saves automatically as
+they fill it in, plus a "Submit to JLB Tax" button once they're done.
+
+It's a single ongoing profile per client, not tied to a specific tax
+year — they can come back and update it anytime their situation changes,
+rather than filling out a fresh one every filing season.
+
+Setup: run `supabase/schema_tax_organizer.sql` in Supabase's SQL Editor.
+No new environment variables or webhooks needed for this one — unlike
+the last two milestones, clients write directly to their own row (same
+pattern as document uploads), so there's no external service in the
+loop.
+
+**Do not add a Social Security Number field to this form.** The
+dependents section deliberately leaves it out — this app isn't cleared
+for that kind of data until the Milestone 5 security review (see the
+note at the bottom of this file).
+
+There's also no staff-facing view yet — for now, check submitted
+responses in Supabase's Table Editor under `tax_organizer_responses`
+(the `responses` column holds everything as JSON, `status` tells you
+draft vs. submitted).
+
 ## Roadmap
 
 - [x] Milestone 1 — login, dashboard, secure document upload/download
 - [x] Milestone 2 — e-signature via Dropbox Sign (needs live testing — see above)
 - [x] Milestone 3 — invoicing and payment via Square (needs live testing — see above)
-- [ ] Milestone 4 — the actual tax organizer questionnaire
+- [x] Milestone 4 — tax organizer questionnaire
 - [ ] Milestone 5 — security review before real client data goes through it
 - [ ] "Get started" button on the main site links here
 - [ ] A real "create invoice" UI for staff, instead of inserting rows by hand
+- [ ] A staff-facing view of submitted tax organizer responses
 
 ## A note on security
 
