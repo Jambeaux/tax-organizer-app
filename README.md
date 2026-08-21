@@ -214,6 +214,19 @@ up on that client's dashboard exactly like one created by hand. Below
 the form is a read-only list of every invoice ever sent, across all
 clients, with its paid/pending status.
 
+## Staff tax organizer view
+
+The `/staff` page now has a second section below invoices: every
+client's tax organizer, sorted by most recently updated, showing their
+email and draft/submitted status. Click a row to expand it into a
+readable summary — filing status, dependents, which income/deduction/
+life-change boxes are checked (not the ones left unchecked), and any
+notes — instead of staff having to read raw JSON in Supabase's Table
+Editor.
+
+No setup needed — it uses the same `STAFF_EMAILS` allowlist as the
+invoice UI.
+
 ## Roadmap
 
 - [x] Milestone 1 — login, dashboard, secure document upload/download
@@ -222,8 +235,8 @@ clients, with its paid/pending status.
 - [x] Milestone 4 — tax organizer questionnaire
 - [x] Milestone 5 — security review (see above — code-level only, not a professional audit)
 - [x] A real "create invoice" UI for staff, instead of inserting rows by hand
+- [x] A staff-facing view of submitted tax organizer responses
 - [ ] "Get started" button on the main site links here
-- [ ] A staff-facing view of submitted tax organizer responses
 
 ## A note on security
 

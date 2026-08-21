@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isStaffEmail } from "@/lib/staff";
 import StaffInvoices from "./StaffInvoices";
+import StaffTaxOrganizers from "./StaffTaxOrganizers";
 
 export default async function StaffPage() {
   const supabase = await createClient();
@@ -41,6 +42,7 @@ export default async function StaffPage() {
       </div>
 
       <StaffInvoices />
+      <StaffTaxOrganizers />
     </div>
   );
 }

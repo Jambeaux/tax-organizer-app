@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type Dependent = {
+export type Dependent = {
   name: string;
   relationship: string;
   dob: string;
   monthsLivedWithYou: string;
 };
 
-type IncomeFlags = {
+export type IncomeFlags = {
   w2: boolean;
   selfEmployment: boolean;
   interestDividends: boolean;
@@ -20,7 +20,7 @@ type IncomeFlags = {
   otherIncome: boolean;
 };
 
-type DeductionFlags = {
+export type DeductionFlags = {
   mortgageInterest: boolean;
   propertyTax: boolean;
   charitableDonations: boolean;
@@ -31,7 +31,7 @@ type DeductionFlags = {
   iraContributions: boolean;
 };
 
-type LifeChangeFlags = {
+export type LifeChangeFlags = {
   marriedOrDivorced: boolean;
   newChild: boolean;
   boughtOrSoldHome: boolean;
@@ -40,7 +40,7 @@ type LifeChangeFlags = {
   majorMedicalExpenses: boolean;
 };
 
-type Responses = {
+export type Responses = {
   filingStatus: string;
   nameOrAddressChange: string;
   occupation: string;
@@ -96,7 +96,7 @@ const EMPTY_RESPONSES: Responses = {
   additionalNotes: "",
 };
 
-const INCOME_FIELDS: { key: keyof IncomeFlags; label: string }[] = [
+export const INCOME_FIELDS: { key: keyof IncomeFlags; label: string }[] = [
   { key: "w2", label: "W-2 wages from an employer" },
   { key: "selfEmployment", label: "Self-employment / 1099 income" },
   { key: "interestDividends", label: "Interest or dividends" },
@@ -106,7 +106,7 @@ const INCOME_FIELDS: { key: keyof IncomeFlags; label: string }[] = [
   { key: "otherIncome", label: "Other income not listed here" },
 ];
 
-const DEDUCTION_FIELDS: { key: keyof DeductionFlags; label: string }[] = [
+export const DEDUCTION_FIELDS: { key: keyof DeductionFlags; label: string }[] = [
   { key: "mortgageInterest", label: "Mortgage interest" },
   { key: "propertyTax", label: "Property tax" },
   { key: "charitableDonations", label: "Charitable donations" },
@@ -117,7 +117,7 @@ const DEDUCTION_FIELDS: { key: keyof DeductionFlags; label: string }[] = [
   { key: "iraContributions", label: "IRA contributions" },
 ];
 
-const LIFE_CHANGE_FIELDS: { key: keyof LifeChangeFlags; label: string }[] = [
+export const LIFE_CHANGE_FIELDS: { key: keyof LifeChangeFlags; label: string }[] = [
   { key: "marriedOrDivorced", label: "Got married or divorced" },
   { key: "newChild", label: "Had or adopted a child" },
   { key: "boughtOrSoldHome", label: "Bought or sold a home" },
