@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isStaffEmail } from "@/lib/staff";
-import PortalDashboard from "./PortalDashboard";
+import StaffInvoices from "./StaffInvoices";
 
-export default async function DashboardPage() {
+export default async function StaffPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -11,6 +11,10 @@ export default async function DashboardPage() {
 
   if (!user) {
     redirect("/login");
+  }
+
+  if (!isStaffEmail(user.email)) {
+    redirect("/dashboard");
   }
 
   return (
@@ -24,15 +28,10 @@ export default async function DashboardPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: "1.3rem", margin: 0 }}>Your documents</h1>
+          <h1 style={{ fontSize: "1.3rem", margin: 0 }}>Staff — Invoices</h1>
           <p style={{ fontSize: "0.85rem", color: "#5f5e5a", margin: "4px 0 0" }}>
             Signed in as {user.email}
           </p>
-          {isStaffEmail(user.email) && (
-            <p style={{ fontSize: "0.8rem", margin: "6px 0 0" }}>
-              <a href="/staff">Go to staff dashboard →</a>
-            </p>
-          )}
         </div>
         <form action="/auth/signout" method="post">
           <button className="btn btn-outline" type="submit">
@@ -41,7 +40,7 @@ export default async function DashboardPage() {
         </form>
       </div>
 
-      <PortalDashboard userId={user.id} />
+      <StaffInvoices />
     </div>
   );
 }

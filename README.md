@@ -191,6 +191,29 @@ requirements for tax preparers) look it over before real client data
 goes through it — especially before enabling live payments or live
 e-signatures.
 
+## Staff invoice UI
+
+There's now a `/staff` page for creating and viewing invoices, instead
+of inserting rows into `payment_requests` by hand.
+
+**Setup:** add a `STAFF_EMAILS` environment variable (comma-separated,
+e.g. `jason@jlbtax.com,otherstaff@jlbtax.com`) in `.env.local` and in
+Vercel's Environments settings. Anyone signing in with one of those
+emails gets a "Go to staff dashboard →" link on their own dashboard and
+can visit `/staff` directly; everyone else who tries gets redirected
+back to their client dashboard.
+
+No new database table for this — it's a plain email allowlist, checked
+server-side in `src/lib/staff.ts`. To add or remove staff, edit the env
+var and redeploy.
+
+The staff page lets you pick a client from a dropdown (populated from
+every signed-up account that isn't in the staff list), enter a
+description and dollar amount, and create the invoice — which then shows
+up on that client's dashboard exactly like one created by hand. Below
+the form is a read-only list of every invoice ever sent, across all
+clients, with its paid/pending status.
+
 ## Roadmap
 
 - [x] Milestone 1 — login, dashboard, secure document upload/download
@@ -198,8 +221,8 @@ e-signatures.
 - [x] Milestone 3 — invoicing and payment via Square
 - [x] Milestone 4 — tax organizer questionnaire
 - [x] Milestone 5 — security review (see above — code-level only, not a professional audit)
+- [x] A real "create invoice" UI for staff, instead of inserting rows by hand
 - [ ] "Get started" button on the main site links here
-- [ ] A real "create invoice" UI for staff, instead of inserting rows by hand
 - [ ] A staff-facing view of submitted tax organizer responses
 
 ## A note on security
