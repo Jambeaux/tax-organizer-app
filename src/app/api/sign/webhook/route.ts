@@ -6,9 +6,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // Configure this URL (https://portal.jlbtax.com/api/sign/webhook) under
 // your Dropbox Sign API App settings once deployed.
 //
-// NOTE: verify this against a real callback payload once Dropbox Sign is
-// wired up live — callback formats have shifted between API versions and
-// this hasn't been tested against a real event yet.
+// Signature verification is enforced below — requests with a missing or
+// invalid event_hash are rejected before any data gets touched. Confirmed
+// working against Dropbox Sign's own callback_test event.
 
 export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
@@ -29,22 +29,24 @@ export async function POST(request: Request) {
     | { signature_request_id?: string; is_complete?: boolean }
     | undefined;
 
-  if (event?.event_hash && event.event_time && event.event_type) {
-    const isLive = process.env.DROPBOX_SIGN_MODE === "live";
-    const apiKey = isLive
-      ? process.env.DROPBOX_SIGN_LIVE_KEY
-      : process.env.DROPBOX_SIGN_TEST_KEY;
+  if (!event?.event_hash || !event.event_time || !event.event_type) {
+    console.warn("Dropbox Sign webhook: rejected — missing event verification fields.");
+    return new Response("Missing event verification fields", { status: 400 });
+  }
 
-    const expected = crypto
-      .createHmac("sha256", apiKey!)
-      .update(event.event_time + event.event_type)
-      .digest("hex");
+  const isLive = process.env.DROPBOX_SIGN_MODE === "live";
+  const apiKey = isLive
+    ? process.env.DROPBOX_SIGN_LIVE_KEY
+    : process.env.DROPBOX_SIGN_TEST_KEY;
 
-    if (expected !== event.event_hash) {
-      console.warn(
-        "Dropbox Sign webhook: event_hash did not match — verify this against a real payload before going live."
-      );
-    }
+  const expected = crypto
+    .createHmac("sha256", apiKey!)
+    .update(event.event_time + event.event_type)
+    .digest("hex");
+
+  if (expected !== event.event_hash) {
+    console.warn("Dropbox Sign webhook: rejected — signature did not match.");
+    return new Response("Invalid signature", { status: 401 });
   }
 
   if (event?.event_type === "callback_test") {

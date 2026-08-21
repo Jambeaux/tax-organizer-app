@@ -68,12 +68,10 @@ Two things to set up before this works end to end:
    `Hello API Event Received`, which is what Dropbox Sign expects to
    consider the URL verified.
 
-This hasn't been tested against a real Dropbox Sign event yet (I don't
-have a live account to fire a test callback from this end) — the webhook
-signature verification in `src/app/api/sign/webhook/route.ts` currently
-logs a warning rather than rejecting on mismatch, specifically so you can
-watch your server logs the first time a real event comes through and
-confirm the format matches, before tightening it to reject bad requests.
+Confirmed working against a real Dropbox Sign callback_test event. As of
+the Milestone 5 security review, the webhook signature check in
+`src/app/api/sign/webhook/route.ts` rejects requests with a missing or
+invalid signature (401) instead of just logging a warning.
 
 It stays in `DROPBOX_SIGN_MODE=test` (sandbox, no real signatures) until
 you deliberately switch it to `live` in your environment variables.
@@ -106,12 +104,10 @@ now, you create one by hand:
    save it — that's the value for `SQUARE_SANDBOX_SIGNATURE_KEY` (or
    `SQUARE_PRODUCTION_SIGNATURE_KEY` once you're live).
 
-Same honest flag as the Dropbox Sign webhook: this hasn't been verified
-against a real Square callback yet. The signature check in
-`src/app/api/pay/webhook/route.ts` currently logs a warning instead of
-rejecting on mismatch, so you can watch the server logs the first time a
-real payment event comes through and confirm it matches before tightening
-it to reject bad requests.
+Confirmed working against a real test event from Square's webhook
+dashboard. As of the Milestone 5 security review, the signature check in
+`src/app/api/pay/webhook/route.ts` rejects requests with an invalid
+signature (401) instead of just logging a warning.
 
 ## Milestone 4 — tax organizer questionnaire
 
@@ -140,18 +136,75 @@ responses in Supabase's Table Editor under `tax_organizer_responses`
 (the `responses` column holds everything as JSON, `status` tells you
 draft vs. submitted).
 
+## Milestone 5 — security review
+
+A first-pass code review of everything built in Milestones 1–4, plus a
+few fixes. What changed:
+
+- **Both webhooks now reject bad requests instead of just warning.** The
+  Dropbox Sign and Square webhooks originally logged a warning on a
+  signature mismatch and kept processing anyway, so they could be
+  verified against real events first. Both are now confirmed working, so
+  they've been tightened: a missing or invalid signature gets a 401 and
+  the request stops there.
+- **Fixed a path traversal issue in the e-signature route.**
+  `src/app/api/sign/request/route.ts` built a temp file path using the
+  client-supplied `documentName` directly. A crafted value with enough
+  `../` sequences could have written the uploaded file content somewhere
+  outside the intended temp directory. Fixed two ways: `documentName` is
+  now validated to reject anything containing `/`, `\`, or `..` before
+  it's used anywhere, and the temp filename itself is now a random UUID
+  rather than being built from user input at all. The temp file is also
+  now cleaned up immediately after each request instead of just relying
+  on Vercel wiping `/tmp` between invocations.
+- **Confirmed the service-role (admin) Supabase client is never used
+  client-side.** It only ever appears in server-only `route.ts` files —
+  if it were imported into a `"use client"` component, that key would
+  ship to the browser. It isn't, anywhere in the app.
+- **Confirmed every table's row-level security policies actually scope
+  to the signed-in user** (`documents` storage, `signature_requests`,
+  `payment_requests`, `tax_organizer_responses`) — spot-checked that
+  each `select`/`insert`/`update` policy requires `auth.uid() = user_id`,
+  and that nothing lets one client read or write another client's rows.
+- **Confirmed ownership checks on the API routes that take an ID from
+  the client.** `/api/pay/checkout` verifies the invoice belongs to the
+  signed-in user before creating a checkout link; `/api/sign/request`
+  only ever reads from that user's own storage folder, never a
+  client-supplied path.
+- **Confirmed the payment amount can't be tampered with from the
+  browser.** The checkout route reads `amount_cents` from the invoice
+  row in the database, not from anything the client sends — a client
+  can't pay less than the invoice by editing the request.
+- **Fixed one dependency vulnerability** (a high-severity issue in a
+  transitive `nanoid` dependency) via `npm audit fix` — 0 vulnerabilities
+  as of this review.
+- **Confirmed no real secrets are committed anywhere** — `.env.local` is
+  gitignored, `.env.local.example` only has blank placeholders, and
+  nothing sensitive is hardcoded in source.
+
+**What this is not:** this was a code-level review done by Claude, not a
+professional third-party security audit or a compliance review. Since
+this app will eventually handle real client SSNs and tax documents for a
+licensed tax practice, it's worth having an actual security professional
+(and possibly someone familiar with IRS Publication 4557's safeguard
+requirements for tax preparers) look it over before real client data
+goes through it — especially before enabling live payments or live
+e-signatures.
+
 ## Roadmap
 
 - [x] Milestone 1 — login, dashboard, secure document upload/download
-- [x] Milestone 2 — e-signature via Dropbox Sign (needs live testing — see above)
-- [x] Milestone 3 — invoicing and payment via Square (needs live testing — see above)
+- [x] Milestone 2 — e-signature via Dropbox Sign
+- [x] Milestone 3 — invoicing and payment via Square
 - [x] Milestone 4 — tax organizer questionnaire
-- [ ] Milestone 5 — security review before real client data goes through it
+- [x] Milestone 5 — security review (see above — code-level only, not a professional audit)
 - [ ] "Get started" button on the main site links here
 - [ ] A real "create invoice" UI for staff, instead of inserting rows by hand
 - [ ] A staff-facing view of submitted tax organizer responses
 
 ## A note on security
 
-This app is not ready for real client SSNs or tax documents until
-milestone 5 is done. Until then, treat it as a working prototype only.
+The code-level issues found in the Milestone 5 review have been fixed,
+but this still hasn't had a professional security or compliance audit.
+Treat it as a working prototype until that happens, especially before
+real client SSNs, tax documents, or live payments go through it.

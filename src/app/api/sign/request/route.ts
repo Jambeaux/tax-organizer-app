@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import crypto from "crypto";
 
 // Sends an existing document (already sitting in the client's Storage
 // folder) out for e-signature via Dropbox Sign, and logs the request so
@@ -27,6 +28,15 @@ export async function POST(request: Request) {
     );
   }
 
+  // documentName comes straight from the request body — never trust it as
+  // a filesystem path. It should only ever be a plain filename (the app
+  // always generates these as `${Date.now()}_${originalName}`), so reject
+  // anything that looks like it's trying to reference a different
+  // directory before it gets anywhere near disk or storage.
+  if (documentName.includes("/") || documentName.includes("\\") || documentName.includes("..")) {
+    return NextResponse.json({ error: "Invalid documentName" }, { status: 400 });
+  }
+
   const admin = createAdminClient();
   const storagePath = `${user.id}/${documentName}`;
   const { data: fileBlob, error: downloadError } = await admin.storage
@@ -42,7 +52,10 @@ export async function POST(request: Request) {
 
 
 const fileBuffer = Buffer.from(await fileBlob.arrayBuffer());
-const tmpPath = path.join(os.tmpdir(), `${user.id}-${documentName}`);
+// Random name, not derived from user input — belt and suspenders on top
+// of the documentName check above, so there's no path-traversal vector
+// into where this temp file gets written.
+const tmpPath = path.join(os.tmpdir(), crypto.randomUUID());
 fs.writeFileSync(tmpPath, fileBuffer);
 const fileStream = fs.createReadStream(tmpPath);
 
@@ -77,6 +90,11 @@ const fileStream = fs.createReadStream(tmpPath);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Dropbox Sign error";
     return NextResponse.json({ error: message }, { status: 502 });
+  } finally {
+    // Clean up the temp file regardless of outcome — Vercel wipes /tmp
+    // between invocations anyway, but no reason to leave client document
+    // bytes sitting on disk any longer than this request needs them.
+    fs.unlink(tmpPath, () => {});
   }
 
   const dropboxSignRequestId =

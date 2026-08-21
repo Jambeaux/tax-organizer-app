@@ -8,11 +8,9 @@ import { getSquareSignatureKey } from "@/lib/square/client";
 // Dashboard > your app > Webhooks, subscribed to the "payment.updated"
 // event, using the same domain that's live in Vercel.
 //
-// NOTE: same caveat as the Dropbox Sign webhook — this hasn't been
-// verified against a real Square callback yet, so signature mismatches
-// are logged as a warning instead of rejected. Watch the server logs the
-// first time a real payment comes through, confirm the signature check
-// passes, then tighten this to reject on mismatch before going live.
+// Signature verification is enforced below — requests that don't match
+// are rejected before any data gets touched. Confirmed working against a
+// real test event from Square's webhook dashboard.
 
 export async function POST(request: Request) {
   const rawBody = await request.text();
@@ -28,9 +26,8 @@ export async function POST(request: Request) {
   });
 
   if (!isValid) {
-    console.warn(
-      "Square webhook: signature did not verify — check this against a real payload before going live."
-    );
+    console.warn("Square webhook: rejected — signature did not verify.");
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
   const payload = JSON.parse(rawBody) as {
