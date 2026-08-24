@@ -59,6 +59,13 @@ const tmpPath = path.join(os.tmpdir(), crypto.randomUUID());
 fs.writeFileSync(tmpPath, fileBuffer);
 const fileStream = fs.createReadStream(tmpPath);
 
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("name")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const signerName = profile?.name || user.email!;
+
   const isLive = process.env.DROPBOX_SIGN_MODE === "live";
   const apiKey = isLive
     ? process.env.DROPBOX_SIGN_LIVE_KEY
@@ -77,7 +84,7 @@ const fileStream = fs.createReadStream(tmpPath);
     signers: [
       {
         emailAddress: user.email!,
-        name: user.email!,
+        name: signerName,
       },
     ],
     files: [fileStream],

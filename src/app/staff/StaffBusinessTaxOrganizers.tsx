@@ -1,18 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  INCOME_FIELDS,
-  DEDUCTION_FIELDS,
-  LIFE_CHANGE_FIELDS,
-  type Responses,
-} from "@/app/dashboard/TaxOrganizer";
+import { EXPENSE_FIELDS, type BusinessResponses } from "@/app/dashboard/BusinessTaxOrganizer";
 
 type OrganizerRow = {
   id: string;
   user_id: string;
   status: string;
-  responses: Responses;
+  responses: BusinessResponses;
   needs_attention: boolean;
   attention_notes: string | null;
   submitted_at: string | null;
@@ -21,15 +16,17 @@ type OrganizerRow = {
   client_name: string | null;
 };
 
-const FILING_STATUS_LABELS: Record<string, string> = {
-  single: "Single",
-  married_joint: "Married filing jointly",
-  married_separate: "Married filing separately",
-  head_of_household: "Head of household",
-  qualifying_widow: "Qualifying widow(er)",
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  sole_proprietor: "Sole proprietor / self-employed",
+  single_member_llc: "Single-member LLC",
+  multi_member_llc: "Multi-member LLC",
+  s_corp: "S-corporation",
+  c_corp: "C-corporation",
+  partnership: "Partnership",
+  not_sure: "Not sure",
 };
 
-export default function StaffTaxOrganizers() {
+export default function StaffBusinessTaxOrganizers() {
   const [organizers, setOrganizers] = useState<OrganizerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -37,7 +34,7 @@ export default function StaffTaxOrganizers() {
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const res = await fetch("/api/staff/tax-organizers");
+      const res = await fetch("/api/staff/business-tax-organizers");
       const body = await res.json().catch(() => ({}));
       setOrganizers(body.organizers ?? []);
       setLoading(false);
@@ -51,11 +48,11 @@ export default function StaffTaxOrganizers() {
 
   return (
     <div className="card" style={{ marginTop: "1.25rem" }}>
-      <p className="section-title">Tax organizer responses</p>
+      <p className="section-title">Business tax organizer responses</p>
 
       {organizers.length === 0 ? (
         <p style={{ fontSize: "0.9rem", color: "#5f5e5a" }}>
-          No clients have started a tax organizer yet.
+          No clients have started a business tax organizer yet.
         </p>
       ) : (
         organizers.map((org) => (
@@ -114,7 +111,7 @@ export default function StaffTaxOrganizers() {
                     {org.attention_notes && <div>{org.attention_notes}</div>}
                   </div>
                 )}
-                <OrganizerDetail responses={org.responses} />
+                <BusinessOrganizerDetail responses={org.responses} />
               </div>
             )}
           </div>
@@ -124,74 +121,61 @@ export default function StaffTaxOrganizers() {
   );
 }
 
-function OrganizerDetail({ responses }: { responses: Responses }) {
-  const checkedIncome = INCOME_FIELDS.filter((f) => responses.income?.[f.key]);
-  const checkedDeductions = DEDUCTION_FIELDS.filter((f) => responses.deductions?.[f.key]);
-  const checkedLifeChanges = LIFE_CHANGE_FIELDS.filter((f) => responses.lifeChanges?.[f.key]);
+function BusinessOrganizerDetail({ responses }: { responses: BusinessResponses }) {
+  const checkedExpenses = EXPENSE_FIELDS.filter((f) => responses.expenses?.[f.key]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
       <div>
-        <strong>Filing status:</strong>{" "}
-        {FILING_STATUS_LABELS[responses.filingStatus] || "Not answered"}
+        <strong>Business name:</strong> {responses.businessName || "Not answered"}
       </div>
 
-      {responses.occupation && (
+      <div>
+        <strong>Business type:</strong>{" "}
+        {ENTITY_TYPE_LABELS[responses.entityType] || "Not answered"}
+      </div>
+
+      {responses.natureOfBusiness && (
         <div>
-          <strong>Occupation:</strong> {responses.occupation}
+          <strong>Nature of business:</strong> {responses.natureOfBusiness}
         </div>
       )}
 
-      {(responses.spouseName || responses.spouseOccupation) && (
+      {responses.yearStarted && (
         <div>
-          <strong>Spouse:</strong> {responses.spouseName || "—"}
-          {responses.spouseOccupation ? ` (${responses.spouseOccupation})` : ""}
+          <strong>Year started:</strong> {responses.yearStarted}
         </div>
       )}
 
-      {responses.nameOrAddressChange && (
+      {responses.ein && (
         <div>
-          <strong>Name/address changes:</strong> {responses.nameOrAddressChange}
+          <strong>EIN:</strong> {responses.ein}
         </div>
       )}
 
       <div>
-        <strong>Dependents:</strong>{" "}
-        {responses.dependents?.length ? (
-          <ul style={{ margin: "0.3rem 0 0", paddingLeft: "1.2rem" }}>
-            {responses.dependents.map((dep, i) => (
-              <li key={i}>
-                {dep.name || "Unnamed"} — {dep.relationship || "?"}, born{" "}
-                {dep.dob || "?"}, lived with client {dep.monthsLivedWithYou || "?"}{" "}
-                months
-              </li>
-            ))}
-          </ul>
-        ) : (
-          "None listed"
-        )}
+        <strong>Has a P&amp;L statement:</strong>{" "}
+        {responses.hasProfitLossStatement || "Not answered"}
+      </div>
+
+      {responses.grossReceipts && (
+        <div>
+          <strong>Approximate income:</strong> {responses.grossReceipts}
+        </div>
+      )}
+
+      <div>
+        <strong>Expense categories:</strong>{" "}
+        {checkedExpenses.length ? checkedExpenses.map((f) => f.label).join(", ") : "None checked"}
+        {responses.expenseNotes && <div>Notes: {responses.expenseNotes}</div>}
       </div>
 
       <div>
-        <strong>Income sources:</strong>{" "}
-        {checkedIncome.length ? checkedIncome.map((f) => f.label).join(", ") : "None checked"}
-        {responses.incomeNotes && <div>Notes: {responses.incomeNotes}</div>}
+        <strong>Has employees:</strong> {responses.hasEmployees || "Not answered"}
       </div>
 
       <div>
-        <strong>Deductions/credits:</strong>{" "}
-        {checkedDeductions.length
-          ? checkedDeductions.map((f) => f.label).join(", ")
-          : "None checked"}
-        {responses.deductionNotes && <div>Notes: {responses.deductionNotes}</div>}
-      </div>
-
-      <div>
-        <strong>Life changes:</strong>{" "}
-        {checkedLifeChanges.length
-          ? checkedLifeChanges.map((f) => f.label).join(", ")
-          : "None checked"}
-        {responses.lifeChangeNotes && <div>Notes: {responses.lifeChangeNotes}</div>}
+        <strong>Paid contractors $600+:</strong> {responses.issuedForms1099 || "Not answered"}
       </div>
 
       {responses.additionalNotes && (

@@ -227,6 +227,87 @@ Editor.
 No setup needed — it uses the same `STAFF_EMAILS` allowlist as the
 invoice UI.
 
+## Milestone 6 — accounts, invites, business organizer, and correspondence
+
+Before this milestone, anyone who found the login page could sign up
+with any email and get straight into a dashboard — there was no way to
+tell a real client from a bot or a stranger poking around. This
+milestone adds an approval step, a way to invite specific clients, a
+second organizer for business/self-employment income, and a few
+smaller trust and personalization touches.
+
+**What's new:**
+
+- **New accounts start out "pending."** Someone can still sign in with
+  just their email (same magic-link flow as before), but their
+  dashboard shows a "we're reviewing your account" message instead of
+  their documents until a staff member approves them. This is what
+  keeps a random or automated signup from getting real access.
+- **Staff can invite a client ahead of time.** From `/staff`, enter a
+  name and email to create an invite — when that person later signs in
+  with that same email, they're approved automatically instead of
+  landing in the pending queue. The invite list also gives you a
+  shareable link to copy and send however you'd like (text, email,
+  in person).
+- **Staff can approve or reject pending accounts** right from the new
+  "Pending accounts" section at the top of `/staff`. Reject deletes the
+  account outright — meant for obvious spam/bot signups.
+- **A name and mailing address are now part of the (personal) tax
+  organizer**, and sync automatically to the client's profile — so
+  staff see a real name instead of just an email address throughout
+  `/staff`.
+- **A separate business tax organizer** for clients with self-employment,
+  1099, or business income — business name/type, income, expense
+  categories, employees/contractors, and whether they already have a
+  profit & loss statement. A client can fill out the personal
+  organizer, the business one, or both (e.g. someone with a W-2 job
+  and a side business) — there's a checkbox on the dashboard
+  ("I also have self-employment, 1099, or business income") that
+  reveals it, and that choice is remembered on their profile.
+- **Clients can flag their own situation as needing extra attention**,
+  on both organizers — a checkbox plus a short note. Staff see a red
+  "Needs attention" badge on that client's row in `/staff`, with the
+  note shown when expanded, instead of relying on staff to notice
+  something buried in free-text.
+- **Dropbox Sign now addresses the client by name** (from their profile)
+  instead of just their email address, when a signature request goes
+  out. Square's quick-pay checkout doesn't have an equivalent spot for
+  this — it's a hosted page where the buyer enters their own info, so
+  there's nothing to personalize there with the current integration.
+- **A short anti-phishing note on the login page**, reminding clients
+  that JLB Tax will never call, text, or email asking for a password,
+  SSN, or card number, and that sign-in only ever happens through that
+  page.
+
+**Setup:**
+
+1. Run the three new migrations, in order, in Supabase's SQL Editor:
+   `supabase/schema_accounts.sql`, then
+   `supabase/schema_needs_attention.sql`, then
+   `supabase/schema_business_organizer.sql`.
+2. No new environment variables or webhooks — everything here uses the
+   same Supabase project and the existing `STAFF_EMAILS` allowlist.
+3. **If you already have client accounts from before this milestone**,
+   their first login after this deploy will create a profile row for
+   them automatically, defaulting to `pending` — you'll need to approve
+   each of them once from the new "Pending accounts" list (or add an
+   invite for their email beforehand, so they're approved the moment
+   they log in). Existing staff accounts aren't affected — the pending
+   gate only applies to non-staff emails.
+
+**A note on this build:** this milestone's code passes a full
+TypeScript check (`npx tsc --noEmit`) with no errors from anything
+touched here (two pre-existing, unrelated errors about the `square`
+package's type declarations were already there before this milestone
+and aren't something this work introduced). A full `next build` could
+not be completed inside this working session — Turbopack's build cache
+doesn't get along with this session's connected-folder protections
+against deleting files, and a from-scratch build in a scratch directory
+didn't finish before the session's time budget ran out. Run
+`npm run build` yourself before deploying, or just let Vercel's own
+build be the real check — Vercel builds in a normal environment without
+either of those constraints.
+
 ## Roadmap
 
 - [x] Milestone 1 — login, dashboard, secure document upload/download
@@ -236,6 +317,7 @@ invoice UI.
 - [x] Milestone 5 — security review (see above — code-level only, not a professional audit)
 - [x] A real "create invoice" UI for staff, instead of inserting rows by hand
 - [x] A staff-facing view of submitted tax organizer responses
+- [x] Milestone 6 — accounts/approval, invites, business organizer, needs-attention flag, personalized Dropbox Sign
 - [ ] "Get started" button on the main site links here
 
 ## A note on security

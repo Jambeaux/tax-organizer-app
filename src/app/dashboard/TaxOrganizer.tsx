@@ -41,6 +41,8 @@ export type LifeChangeFlags = {
 };
 
 export type Responses = {
+  fullName: string;
+  address: string;
   filingStatus: string;
   nameOrAddressChange: string;
   occupation: string;
@@ -57,6 +59,8 @@ export type Responses = {
 };
 
 const EMPTY_RESPONSES: Responses = {
+  fullName: "",
+  address: "",
   filingStatus: "",
   nameOrAddressChange: "",
   occupation: "",
@@ -130,6 +134,8 @@ export default function TaxOrganizer({ userId }: { userId: string }) {
   const supabase = createClient();
   const [responses, setResponses] = useState<Responses>(EMPTY_RESPONSES);
   const [status, setStatus] = useState<string>("draft");
+  const [needsAttention, setNeedsAttention] = useState(false);
+  const [attentionNotes, setAttentionNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [submitting, setSubmitting] = useState(false);
@@ -140,13 +146,15 @@ export default function TaxOrganizer({ userId }: { userId: string }) {
     async function load() {
       const { data } = await supabase
         .from("tax_organizer_responses")
-        .select("responses, status")
+        .select("responses, status, needs_attention, attention_notes")
         .eq("user_id", userId)
         .maybeSingle();
 
       if (data) {
         setResponses({ ...EMPTY_RESPONSES, ...(data.responses as Partial<Responses>) });
         setStatus(data.status);
+        setNeedsAttention(!!data.needs_attention);
+        setAttentionNotes(data.attention_notes ?? "");
       }
       skipNextSave.current = true;
       setLoading(false);
@@ -169,17 +177,38 @@ export default function TaxOrganizer({ userId }: { userId: string }) {
       const { error } = await supabase
         .from("tax_organizer_responses")
         .upsert(
-          { user_id: userId, responses, updated_at: new Date().toISOString() },
+          {
+            user_id: userId,
+            responses,
+            needs_attention: needsAttention,
+            attention_notes: attentionNotes,
+            updated_at: new Date().toISOString(),
+          },
           { onConflict: "user_id" }
         );
       setSaveState(error ? "error" : "saved");
+
+      // Keep the client's profile (used by staff for the account
+      // directory and by Dropbox Sign for the signer name) in sync with
+      // whatever name/address they enter here. This is a self-update on
+      // their own row, allowed by the column-level grant on profiles.
+      if (responses.fullName || responses.address) {
+        await supabase
+          .from("profiles")
+          .update({
+            name: responses.fullName || undefined,
+            address: responses.address || undefined,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", userId);
+      }
     }, 1000);
 
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [responses]);
+  }, [responses, needsAttention, attentionNotes]);
 
   function updateField<K extends keyof Responses>(key: K, value: Responses[K]) {
     setResponses((prev) => ({ ...prev, [key]: value }));
@@ -224,6 +253,8 @@ export default function TaxOrganizer({ userId }: { userId: string }) {
       {
         user_id: userId,
         responses,
+        needs_attention: needsAttention,
+        attention_notes: attentionNotes,
         status: "submitted",
         submitted_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -268,6 +299,24 @@ export default function TaxOrganizer({ userId }: { userId: string }) {
       </p>
 
       <p className="section-title">Personal &amp; filing info</p>
+
+      <div className="field-group">
+        <label className="field-label">Full legal name</label>
+        <input
+          type="text"
+          value={responses.fullName}
+          onChange={(e) => updateField("fullName", e.target.value)}
+        />
+      </div>
+
+      <div className="field-group">
+        <label className="field-label">Mailing address</label>
+        <textarea
+          value={responses.address}
+          onChange={(e) => updateField("address", e.target.value)}
+          placeholder="Street, city, state, ZIP"
+        />
+      </div>
 
       <div className="field-group">
         <label className="field-label">Filing status</label>
@@ -462,6 +511,26 @@ export default function TaxOrganizer({ userId }: { userId: string }) {
           placeholder="Anything else we should know before preparing your return"
         />
       </div>
+
+      <label className="checkbox-row" style={{ marginTop: "0.5rem" }}>
+        <input
+          type="checkbox"
+          checked={needsAttention}
+          onChange={(e) => setNeedsAttention(e.target.checked)}
+        />
+        My situation is more complex than usual, or I need extra attention
+      </label>
+
+      {needsAttention && (
+        <div className="field-group" style={{ marginTop: "0.5rem" }}>
+          <label className="field-label">Tell us a bit more</label>
+          <textarea
+            value={attentionNotes}
+            onChange={(e) => setAttentionNotes(e.target.value)}
+            placeholder="e.g. multiple years of unfiled returns, recent IRS notice, major life event, etc."
+          />
+        </div>
+      )}
 
       <div
         style={{

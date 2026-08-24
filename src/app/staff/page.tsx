@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isStaffEmail } from "@/lib/staff";
+import StaffAccounts from "./StaffAccounts";
 import StaffInvoices from "./StaffInvoices";
 import StaffTaxOrganizers from "./StaffTaxOrganizers";
+import StaffBusinessTaxOrganizers from "./StaffBusinessTaxOrganizers";
 
 export default async function StaffPage() {
   const supabase = await createClient();
@@ -29,7 +31,7 @@ export default async function StaffPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: "1.3rem", margin: 0 }}>Staff — Invoices</h1>
+          <h1 style={{ fontSize: "1.3rem", margin: 0 }}>Staff dashboard</h1>
           <p style={{ fontSize: "0.85rem", color: "#5f5e5a", margin: "4px 0 0" }}>
             Signed in as {user.email}
           </p>
@@ -41,8 +43,10 @@ export default async function StaffPage() {
         </form>
       </div>
 
+      <StaffAccounts />
       <StaffInvoices />
       <StaffTaxOrganizers />
+      <StaffBusinessTaxOrganizers />
     </div>
   );
 }

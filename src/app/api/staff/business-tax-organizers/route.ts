@@ -3,8 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isStaffEmail } from "@/lib/staff";
 
-// Every client's tax organizer, newest-updated first, with the client's
-// email attached. Staff-only.
+// Every client's business tax organizer, newest-updated first, with the
+// client's name/email attached. Staff-only.
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -18,7 +18,7 @@ export async function GET() {
   const admin = createAdminClient();
 
   const { data: organizers, error } = await admin
-    .from("tax_organizer_responses")
+    .from("business_tax_organizer_responses")
     .select("id, user_id, status, responses, needs_attention, attention_notes, submitted_at, updated_at")
     .order("updated_at", { ascending: false });
 

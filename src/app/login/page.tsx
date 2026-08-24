@@ -1,10 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -65,6 +75,12 @@ export default function LoginPage() {
             )}
           </form>
         )}
+
+        <p style={{ fontSize: "0.75rem", color: "#5f5e5a", marginTop: "1.5rem", marginBottom: 0 }}>
+          For your security: JLB Tax &amp; Bookkeeping will never call, text,
+          or email you asking for a password, Social Security Number, or
+          payment card number. Sign-in only ever happens through this page.
+        </p>
       </div>
     </div>
   );

@@ -4,7 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isStaffEmail } from "@/lib/staff";
 
 // Returns every signed-up client (i.e. every auth user who isn't staff),
-// for the "Create invoice" client picker. Staff-only.
+// with name/status/is_business from their profile when available — for
+// the "Create invoice" client picker and the staff account directory.
+// Staff-only.
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -22,9 +24,23 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("user_id, name, status, is_business");
+  const profileByUserId = new Map((profiles ?? []).map((p) => [p.user_id, p]));
+
   const clients = data.users
     .filter((u) => !isStaffEmail(u.email))
-    .map((u) => ({ id: u.id, email: u.email }));
+    .map((u) => {
+      const profile = profileByUserId.get(u.id);
+      return {
+        id: u.id,
+        email: u.email,
+        name: profile?.name ?? null,
+        status: profile?.status ?? "pending",
+        is_business: profile?.is_business ?? false,
+      };
+    });
 
   return NextResponse.json({ clients });
 }
