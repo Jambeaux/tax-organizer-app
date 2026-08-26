@@ -16,7 +16,9 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    searchParams.get("error")
+  );
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
