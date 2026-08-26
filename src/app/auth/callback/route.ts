@@ -6,6 +6,16 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/dashboard";
 
+  // Supabase's own /verify endpoint appends these when IT fails before
+  // ever handing us a code (expired/used link, wrong redirect URL, etc).
+  // Surface whatever it tells us instead of our own generic fallback.
+  const supabaseError = searchParams.get("error_description") || searchParams.get("error");
+  if (supabaseError && !code) {
+    return NextResponse.redirect(
+      `${origin}/login?error=${encodeURIComponent(supabaseError)}`
+    );
+  }
+
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
