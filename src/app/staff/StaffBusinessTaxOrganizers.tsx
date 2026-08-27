@@ -182,6 +182,7 @@ function BusinessOrganizerDetail({
     toNumber(responses.grossReceiptsSales) -
     (toNumber(responses.returnsAllowances) + toNumber(responses.costOfGoodsSold));
 
+  const hasVehicleInfo = !!(responses.vehicleYear || responses.vehicleMake || responses.vehicleModel);
   const filledVehicleExpenses = VEHICLE_EXPENSE_ITEMS.filter(
     (item) => toNumber(responses.vehicleExpenses?.[item.key]) > 0
   );
@@ -279,9 +280,17 @@ function BusinessOrganizerDetail({
       )}
       {responses.expenseNotes && <div>Expense notes: {responses.expenseNotes}</div>}
 
-      {(filledVehicleExpenses.length > 0 || responses.totalMilesDriven) && (
+      {(filledVehicleExpenses.length > 0 || responses.totalMilesDriven || hasVehicleInfo) && (
         <>
           <p style={{ fontWeight: 600, margin: "0.5rem 0 0" }}>Auto expense worksheet</p>
+          <Field
+            label="Vehicle"
+            value={
+              [responses.vehicleYear, responses.vehicleMake, responses.vehicleModel]
+                .filter(Boolean)
+                .join(" ") || undefined
+            }
+          />
           <Field label="Date placed in service" value={responses.vehicleDatePlacedInService} />
           <Field label="Total miles driven" value={responses.totalMilesDriven} />
           <Field label="Business miles" value={responses.businessMiles} />

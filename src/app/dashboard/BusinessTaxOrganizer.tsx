@@ -133,6 +133,9 @@ export type BusinessResponses = {
   expenseNotes: string;
 
   // Auto expense worksheet
+  vehicleYear: string;
+  vehicleMake: string;
+  vehicleModel: string;
   vehicleDatePlacedInService: string;
   totalMilesDriven: string;
   businessMiles: string;
@@ -196,6 +199,9 @@ const EMPTY_BUSINESS_RESPONSES: BusinessResponses = {
   miscExpenses: [],
   expenseNotes: "",
 
+  vehicleYear: "",
+  vehicleMake: "",
+  vehicleModel: "",
   vehicleDatePlacedInService: "",
   totalMilesDriven: "",
   businessMiles: "",
@@ -774,6 +780,36 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
       <p style={{ fontSize: "0.85rem", color: "#5f5e5a", marginTop: 0 }}>
         Fill this out if you use a vehicle for this business.
       </p>
+
+      <div style={{ display: "flex", gap: "0.75rem" }}>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">Year</label>
+          <input
+            type="text"
+            value={responses.vehicleYear}
+            onChange={(e) => updateField("vehicleYear", e.target.value)}
+            placeholder="e.g. 2021"
+          />
+        </div>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">Make</label>
+          <input
+            type="text"
+            value={responses.vehicleMake}
+            onChange={(e) => updateField("vehicleMake", e.target.value)}
+            placeholder="e.g. Toyota"
+          />
+        </div>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">Model</label>
+          <input
+            type="text"
+            value={responses.vehicleModel}
+            onChange={(e) => updateField("vehicleModel", e.target.value)}
+            placeholder="e.g. Camry"
+          />
+        </div>
+      </div>
 
       <div className="field-group">
         <label className="field-label">Date vehicle placed in service</label>
