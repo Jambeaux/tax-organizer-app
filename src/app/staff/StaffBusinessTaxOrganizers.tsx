@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { EXPENSE_FIELDS, type BusinessResponses } from "@/app/dashboard/BusinessTaxOrganizer";
+import {
+  EXPENSE_LINE_ITEMS,
+  VEHICLE_EXPENSE_ITEMS,
+  type BusinessResponses,
+} from "@/app/dashboard/BusinessTaxOrganizer";
 
 type OrganizerRow = {
   id: string;
@@ -25,6 +29,16 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   partnership: "Partnership",
   not_sure: "Not sure",
 };
+
+function toNumber(value: string | undefined): number {
+  if (!value) return 0;
+  const n = parseFloat(value.replace(/[^0-9.-]/g, ""));
+  return isNaN(n) ? 0 : n;
+}
+
+function formatMoney(n: number): string {
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 export default function StaffBusinessTaxOrganizers() {
   const [organizers, setOrganizers] = useState<OrganizerRow[]>([]);
@@ -121,62 +135,150 @@ export default function StaffBusinessTaxOrganizers() {
   );
 }
 
+function Field({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <div>
+      <strong>{label}:</strong> {value}
+    </div>
+  );
+}
+
 function BusinessOrganizerDetail({ responses }: { responses: BusinessResponses }) {
-  const checkedExpenses = EXPENSE_FIELDS.filter((f) => responses.expenses?.[f.key]);
+  const filledExpenses = EXPENSE_LINE_ITEMS.filter(
+    (item) => toNumber(responses.expenses?.[item.key]) > 0
+  );
+  const totalExpenses = EXPENSE_LINE_ITEMS.reduce(
+    (sum, item) => sum + toNumber(responses.expenses?.[item.key]),
+    0
+  );
+
+  const grossIncome =
+    toNumber(responses.grossReceiptsSales) -
+    (toNumber(responses.returnsAllowances) + toNumber(responses.costOfGoodsSold));
+
+  const filledVehicleExpenses = VEHICLE_EXPENSE_ITEMS.filter(
+    (item) => toNumber(responses.vehicleExpenses?.[item.key]) > 0
+  );
+  const totalVehicleExpenses =
+    VEHICLE_EXPENSE_ITEMS.reduce((sum, item) => sum + toNumber(responses.vehicleExpenses?.[item.key]), 0) +
+    toNumber(responses.vehicleOther1Amount) +
+    toNumber(responses.vehicleOther2Amount) +
+    toNumber(responses.vehicleOther3Amount);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-      <div>
-        <strong>Business name:</strong> {responses.businessName || "Not answered"}
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+      <p style={{ fontWeight: 600, margin: "0.25rem 0 0" }}>About the business</p>
+      <Field label="Proprietor" value={responses.proprietorName} />
+      <Field label="Principal business/profession" value={responses.principalBusiness} />
+      <Field label="Business name" value={responses.businessName} />
+      <Field label="Business type" value={ENTITY_TYPE_LABELS[responses.entityType]} />
+      <Field label="EIN" value={responses.ein} />
+      <Field
+        label="Address"
+        value={
+          [responses.businessAddress, responses.city, responses.state, responses.zip]
+            .filter(Boolean)
+            .join(", ") || undefined
+        }
+      />
+      <Field label="Years owned" value={responses.yearsOwned} />
+      <Field label="Records maintained by" value={responses.recordsMaintainer} />
+      <Field label="Separate business bank account" value={responses.separateBankAccounts} />
+      <Field label="Has 1099-NEC forms" value={responses.has1099NEC} />
+      <Field label="Made payments requiring a 1099" value={responses.madePayments1099} />
+      <Field label="Filed required 1099 forms" value={responses.filedRequiredForms} />
+      <Field label="Home-based business" value={responses.homeBased} />
 
-      <div>
-        <strong>Business type:</strong>{" "}
-        {ENTITY_TYPE_LABELS[responses.entityType] || "Not answered"}
-      </div>
-
-      {responses.natureOfBusiness && (
+      <p style={{ fontWeight: 600, margin: "0.5rem 0 0" }}>Income</p>
+      <Field label="Has P&L statement" value={responses.hasProfitLossStatement} />
+      <Field label="Gross receipts and sales" value={responses.grossReceiptsSales && `$${responses.grossReceiptsSales}`} />
+      <Field label="Returns and allowances" value={responses.returnsAllowances && `$${responses.returnsAllowances}`} />
+      <Field label="Cost of goods sold" value={responses.costOfGoodsSold && `$${responses.costOfGoodsSold}`} />
+      {(responses.grossReceiptsSales || responses.returnsAllowances || responses.costOfGoodsSold) && (
         <div>
-          <strong>Nature of business:</strong> {responses.natureOfBusiness}
+          <strong>Computed gross income:</strong> ${formatMoney(grossIncome)}
         </div>
       )}
 
-      {responses.yearStarted && (
-        <div>
-          <strong>Year started:</strong> {responses.yearStarted}
+      <p style={{ fontWeight: 600, margin: "0.5rem 0 0" }}>Expenses</p>
+      {filledExpenses.length ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+          {filledExpenses.map((item) => (
+            <div key={item.key} style={{ display: "flex", justifyContent: "space-between", maxWidth: 360 }}>
+              <span>{item.label}</span>
+              <span>${responses.expenses[item.key]}</span>
+            </div>
+          ))}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              maxWidth: 360,
+              fontWeight: 700,
+              borderTop: "1px solid var(--gray)",
+              paddingTop: "0.25rem",
+            }}
+          >
+            <span>Total</span>
+            <span>${formatMoney(totalExpenses)}</span>
+          </div>
         </div>
+      ) : (
+        <p style={{ color: "#5f5e5a", margin: 0 }}>No expense amounts entered</p>
+      )}
+      {responses.expenseNotes && <div>Expense notes: {responses.expenseNotes}</div>}
+
+      {(filledVehicleExpenses.length > 0 || responses.totalMilesDriven) && (
+        <>
+          <p style={{ fontWeight: 600, margin: "0.5rem 0 0" }}>Auto expense worksheet</p>
+          <Field label="Date placed in service" value={responses.vehicleDatePlacedInService} />
+          <Field label="Total miles driven" value={responses.totalMilesDriven} />
+          <Field label="Business miles" value={responses.businessMiles} />
+          <Field label="Commuting miles" value={responses.commutingMiles} />
+          <Field label="Other miles" value={responses.otherMiles} />
+          {filledVehicleExpenses.map((item) => (
+            <div key={item.key} style={{ display: "flex", justifyContent: "space-between", maxWidth: 360 }}>
+              <span>{item.label}</span>
+              <span>${responses.vehicleExpenses[item.key]}</span>
+            </div>
+          ))}
+          {responses.vehicleOther1Label && (
+            <div style={{ display: "flex", justifyContent: "space-between", maxWidth: 360 }}>
+              <span>{responses.vehicleOther1Label}</span>
+              <span>${responses.vehicleOther1Amount}</span>
+            </div>
+          )}
+          {responses.vehicleOther2Label && (
+            <div style={{ display: "flex", justifyContent: "space-between", maxWidth: 360 }}>
+              <span>{responses.vehicleOther2Label}</span>
+              <span>${responses.vehicleOther2Amount}</span>
+            </div>
+          )}
+          {responses.vehicleOther3Label && (
+            <div style={{ display: "flex", justifyContent: "space-between", maxWidth: 360 }}>
+              <span>{responses.vehicleOther3Label}</span>
+              <span>${responses.vehicleOther3Amount}</span>
+            </div>
+          )}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              maxWidth: 360,
+              fontWeight: 700,
+              borderTop: "1px solid var(--gray)",
+              paddingTop: "0.25rem",
+            }}
+          >
+            <span>Total vehicle expenses</span>
+            <span>${formatMoney(totalVehicleExpenses)}</span>
+          </div>
+        </>
       )}
 
-      {responses.ein && (
-        <div>
-          <strong>EIN:</strong> {responses.ein}
-        </div>
-      )}
-
-      <div>
-        <strong>Has a P&amp;L statement:</strong>{" "}
-        {responses.hasProfitLossStatement || "Not answered"}
-      </div>
-
-      {responses.grossReceipts && (
-        <div>
-          <strong>Approximate income:</strong> {responses.grossReceipts}
-        </div>
-      )}
-
-      <div>
-        <strong>Expense categories:</strong>{" "}
-        {checkedExpenses.length ? checkedExpenses.map((f) => f.label).join(", ") : "None checked"}
-        {responses.expenseNotes && <div>Notes: {responses.expenseNotes}</div>}
-      </div>
-
-      <div>
-        <strong>Has employees:</strong> {responses.hasEmployees || "Not answered"}
-      </div>
-
-      <div>
-        <strong>Paid contractors $600+:</strong> {responses.issuedForms1099 || "Not answered"}
-      </div>
+      <p style={{ fontWeight: 600, margin: "0.5rem 0 0" }}>Employees</p>
+      <Field label="Has employees" value={responses.hasEmployees} />
 
       {responses.additionalNotes && (
         <div>

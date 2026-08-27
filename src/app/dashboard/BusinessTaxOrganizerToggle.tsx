@@ -32,7 +32,7 @@ export default function BusinessTaxOrganizerToggle({
           checked={isBusiness}
           onChange={(e) => handleToggle(e.target.checked)}
         />
-        I also have self-employment, 1099, or business income
+        Do you need to enter business information? (self-employment, 1099, or business income)
       </label>
 
       {isBusiness && <BusinessTaxOrganizer userId={userId} />}
