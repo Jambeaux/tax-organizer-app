@@ -1,20 +1,24 @@
--- Milestone 6: accounts, invites, and staff approval.
+-- Milestone 6: accounts and invites.
 --
--- Two new tables:
+-- Two tables:
 --
 -- 1. `profiles` — one row per signed-up client, holding info Supabase's
 --    auth.users table doesn't (name, address, phone, whether they're a
---    business/self-employed client) plus an approval `status`. New
---    accounts start as 'pending' and only become 'approved' once staff
---    approves them, or automatically if they signed up using an email
---    a staff member already invited. This is what keeps a random bot
---    or spam signup from getting real access to the portal even though
---    Supabase's own magic-link signup is open to anyone.
+--    business/self-employed client) plus a `status` column. New accounts
+--    are approved immediately — CAPTCHA on the sign-in form (Cloudflare
+--    Turnstile, see src/app/login/Turnstile.tsx and README) is what
+--    keeps bots/spam out, not manual review. `status` is kept around so
+--    staff can flag/deactivate a specific account later if ever needed.
+--
+--    NOTE: earlier versions of this schema defaulted new rows to
+--    'pending' and gated dashboard access on staff approval. If you ran
+--    that version already, run this once to update existing rows and
+--    the default for new ones:
+--      update profiles set status = 'approved' where status = 'pending';
+--      alter table profiles alter column status set default 'approved';
 --
 -- 2. `invites` — created by staff (name + email) before a client ever
---    signs up. When that email later completes magic-link login for the
---    first time, the app auto-approves their new profile and marks the
---    invite used, instead of leaving them in the pending queue.
+--    signs up, so the app can pre-fill their name on first login.
 --
 -- Run this after schema_tax_organizer.sql.
 
@@ -25,7 +29,7 @@ create table if not exists profiles (
   phone text,
   address text,
   is_business boolean not null default false,
-  status text not null default 'pending' check (status in ('pending', 'approved')),
+  status text not null default 'approved' check (status in ('pending', 'approved')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

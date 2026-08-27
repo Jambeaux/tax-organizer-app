@@ -15,10 +15,11 @@ export type Profile = {
 // Server-side only (uses the service role key). Looks up this user's
 // profile row, creating one if this is their first time logging in.
 //
-// A brand-new profile starts out 'pending' unless a staff member
-// already created an invite for this exact email — in that case we
-// auto-approve immediately and mark the invite used, so a client who
-// was personally invited never sits in the approval queue.
+// New profiles are approved immediately — CAPTCHA on the sign-in form
+// (see src/app/login/Turnstile.tsx) is what keeps bots/spam out now,
+// so there's no manual staff review step to sit in. `status` is kept
+// around so staff can still flag/deactivate a specific account later
+// if needed, just not as a gate on first access.
 export async function getOrCreateProfile(
   userId: string,
   email: string
@@ -42,7 +43,7 @@ export async function getOrCreateProfile(
     .limit(1)
     .maybeSingle();
 
-  const status = invite ? "approved" : "pending";
+  const status = "approved";
   const name = invite?.name ?? null;
 
   const { data: created, error } = await admin

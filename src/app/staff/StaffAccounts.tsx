@@ -140,8 +140,9 @@ export default function StaffAccounts() {
             Pending accounts ({pending.length})
           </p>
           <p style={{ fontSize: "0.85rem", color: "#5f5e5a", marginTop: 0 }}>
-            New signups wait here until approved — this keeps random or
-            bot signups from getting real access to the portal.
+            These are leftover from before CAPTCHA replaced manual review —
+            new signups no longer land here. You can still approve or
+            reject them below.
           </p>
           {pending.map((c) => (
             <div className="doc-row" key={c.id}>
@@ -174,9 +175,8 @@ export default function StaffAccounts() {
       <div className="card" style={{ marginBottom: "1.25rem" }}>
         <p className="section-title">Invite a client</p>
         <p style={{ fontSize: "0.85rem", color: "#5f5e5a", marginTop: 0 }}>
-          Creates a record of who you're expecting, so when they sign in
-          with this email they're approved automatically instead of
-          landing in the pending queue.
+          Creates a record of who you're expecting, so their name is
+          pre-filled automatically the first time they sign in.
         </p>
 
         {inviteError && (

@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import Turnstile from "./Turnstile";
 
 export default function LoginPage() {
   return (
@@ -20,6 +21,8 @@ function LoginForm() {
     searchParams.get("error")
   );
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRequired = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,6 +34,7 @@ function LoginForm() {
       email,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
+        captchaToken: captchaToken ?? undefined,
       },
     });
 
@@ -38,6 +42,7 @@ function LoginForm() {
 
     if (error) {
       setError(error.message);
+      setCaptchaToken(null);
     } else {
       setSent(true);
     }
@@ -69,7 +74,12 @@ function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               style={{ marginBottom: "1rem" }}
             />
-            <button className="btn" type="submit" disabled={loading}>
+            <Turnstile onToken={setCaptchaToken} />
+            <button
+              className="btn"
+              type="submit"
+              disabled={loading || (captchaRequired && !captchaToken)}
+            >
               {loading ? "Sending..." : "Send sign-in link"}
             </button>
             {error && (

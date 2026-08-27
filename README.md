@@ -238,20 +238,21 @@ smaller trust and personalization touches.
 
 **What's new:**
 
-- **New accounts start out "pending."** Someone can still sign in with
+- **New accounts start out "pending."** ~~Someone can still sign in with
   just their email (same magic-link flow as before), but their
   dashboard shows a "we're reviewing your account" message instead of
-  their documents until a staff member approves them. This is what
-  keeps a random or automated signup from getting real access.
+  their documents until a staff member approves them.~~ **Superseded in
+  Milestone 7 — see below.** New accounts are approved immediately now;
+  CAPTCHA on the sign-in form is what keeps bots out instead.
 - **Staff can invite a client ahead of time.** From `/staff`, enter a
   name and email to create an invite — when that person later signs in
-  with that same email, they're approved automatically instead of
-  landing in the pending queue. The invite list also gives you a
-  shareable link to copy and send however you'd like (text, email,
-  in person).
-- **Staff can approve or reject pending accounts** right from the new
-  "Pending accounts" section at the top of `/staff`. Reject deletes the
-  account outright — meant for obvious spam/bot signups.
+  with that same email, their name is pre-filled on their profile
+  automatically. The invite list also gives you a shareable link to
+  copy and send however you'd like (text, email, in person).
+- **Staff can still approve or reject accounts** from the "Pending
+  accounts" section at the top of `/staff` (only shows up if any exist).
+  Reject deletes the account outright — meant for obvious spam/bot
+  signups, or to remove any account after the fact.
 - **A name and mailing address are now part of the (personal) tax
   organizer**, and sync automatically to the client's profile — so
   staff see a real name instead of just an email address throughout
@@ -308,6 +309,61 @@ didn't finish before the session's time budget ran out. Run
 build be the real check — Vercel builds in a normal environment without
 either of those constraints.
 
+## Milestone 7 — CAPTCHA instead of manual account approval
+
+Milestone 6's "pending until staff approves" gate added a step between
+signing up and getting real access — meant to keep bots and spam out,
+but it also meant every real client had to wait on a staff member. This
+milestone replaces that gate with CAPTCHA on the sign-in form itself:
+bots get stopped before they can even request a sign-in link, and real
+people get straight into their dashboard the moment they click it —
+no waiting on anyone.
+
+**What's new:**
+
+- **Cloudflare Turnstile on the sign-in form** (`src/app/login/Turnstile.tsx`).
+  Renders automatically if `NEXT_PUBLIC_TURNSTILE_SITE_KEY` is set; the
+  "Send sign-in link" button stays disabled until it's solved, and the
+  token is passed straight through to Supabase's own CAPTCHA
+  verification via `signInWithOtp`.
+- **New accounts are approved immediately** — `getOrCreateProfile` no
+  longer sets new profiles to `pending`, and the dashboard no longer
+  checks `status` before showing a client their documents.
+- **The staff "Pending accounts" and invite-approval flow still exists**
+  in the code (approve/reject buttons, `status` column) in case you
+  ever want to flag or remove a specific account by hand, but it's no
+  longer something a normal signup passes through.
+
+**Setup (required for CAPTCHA to actually run):**
+
+1. Create a free Cloudflare account if you don't have one, then go to
+   the Turnstile section of the dashboard and add a new site for
+   `portal.jlbtax.com` (widget mode: Managed is fine). This gives you a
+   **Site Key** and a **Secret Key**.
+2. In Vercel, add an environment variable
+   `NEXT_PUBLIC_TURNSTILE_SITE_KEY` set to the Site Key, then redeploy.
+   (Also add it to your local `.env.local` if you want CAPTCHA to show
+   up when running the app locally.)
+3. In Supabase, go to Authentication → Attack Protection (naming may
+   vary slightly by Supabase version), enable CAPTCHA protection,
+   choose Turnstile, and paste in the **Secret Key**. This is what
+   actually verifies the token server-side — the app itself never sees
+   or needs the secret key.
+4. Until step 1–3 are done, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` is unset,
+   so the widget simply doesn't render and sign-in works exactly as
+   before (no CAPTCHA, no error) — safe to deploy this code ahead of
+   setting up the Cloudflare/Supabase side.
+
+**If you have existing accounts stuck in `pending` from before this
+milestone** (they can still sign in and use the dashboard now — the
+gate is gone — but they'll still show as "Pending" in the `/staff`
+list), you can clean that up cosmetically by running this once in
+Supabase's SQL Editor:
+
+```sql
+update profiles set status = 'approved' where status = 'pending';
+```
+
 ## Roadmap
 
 - [x] Milestone 1 — login, dashboard, secure document upload/download
@@ -318,6 +374,7 @@ either of those constraints.
 - [x] A real "create invoice" UI for staff, instead of inserting rows by hand
 - [x] A staff-facing view of submitted tax organizer responses
 - [x] Milestone 6 — accounts/approval, invites, business organizer, needs-attention flag, personalized Dropbox Sign
+- [x] Milestone 7 — CAPTCHA on sign-in, replacing manual account approval
 - [ ] "Get started" button on the main site links here
 
 ## A note on security
