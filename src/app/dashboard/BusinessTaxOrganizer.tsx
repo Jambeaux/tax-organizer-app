@@ -122,12 +122,14 @@ export type BusinessResponses = {
 
   // Income
   hasProfitLossStatement: string;
+  profitLossStatementFileName: string;
   grossReceiptsSales: string;
   returnsAllowances: string;
   costOfGoodsSold: string;
 
   // Expenses
   expenses: Record<string, string>;
+  miscExpenses: { description: string; amount: string }[];
   expenseNotes: string;
 
   // Auto expense worksheet
@@ -185,11 +187,13 @@ const EMPTY_BUSINESS_RESPONSES: BusinessResponses = {
   homeBased: "",
 
   hasProfitLossStatement: "",
+  profitLossStatementFileName: "",
   grossReceiptsSales: "",
   returnsAllowances: "",
   costOfGoodsSold: "",
 
   expenses: emptyExpenses(),
+  miscExpenses: [],
   expenseNotes: "",
 
   vehicleDatePlacedInService: "",
@@ -219,6 +223,8 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingPL, setUploadingPL] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextSave = useRef(true);
 
@@ -236,6 +242,7 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
           ...EMPTY_BUSINESS_RESPONSES,
           ...loaded,
           expenses: { ...emptyExpenses(), ...(loaded.expenses ?? {}) },
+          miscExpenses: loaded.miscExpenses ?? [],
           vehicleExpenses: { ...emptyVehicleExpenses(), ...(loaded.vehicleExpenses ?? {}) },
         });
         setStatus(data.status);
@@ -295,6 +302,52 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
     }));
   }
 
+  async function handleUploadProfitLoss(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingPL(true);
+    setUploadError(null);
+
+    const storedName = `${Date.now()}_PL_${file.name}`;
+    const { error } = await supabase.storage
+      .from("documents")
+      .upload(`${userId}/${storedName}`, file, { upsert: false });
+
+    setUploadingPL(false);
+    e.target.value = "";
+
+    if (error) {
+      setUploadError(error.message);
+      return;
+    }
+
+    updateField("profitLossStatementFileName", storedName);
+  }
+
+  function addMiscExpense() {
+    setResponses((prev) => ({
+      ...prev,
+      miscExpenses: [...prev.miscExpenses, { description: "", amount: "" }],
+    }));
+  }
+
+  function updateMiscExpense(index: number, field: "description" | "amount", value: string) {
+    setResponses((prev) => ({
+      ...prev,
+      miscExpenses: prev.miscExpenses.map((item, i) =>
+        i === index ? { ...item, [field]: value } : item
+      ),
+    }));
+  }
+
+  function removeMiscExpense(index: number) {
+    setResponses((prev) => ({
+      ...prev,
+      miscExpenses: prev.miscExpenses.filter((_, i) => i !== index),
+    }));
+  }
+
   async function handleSubmit() {
     setSubmitting(true);
     const { error } = await supabase.from("business_tax_organizer_responses").upsert(
@@ -319,10 +372,15 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
     toNumber(responses.grossReceiptsSales) -
     (toNumber(responses.returnsAllowances) + toNumber(responses.costOfGoodsSold));
 
-  const totalExpenses = EXPENSE_LINE_ITEMS.reduce(
+  const totalFixedExpenses = EXPENSE_LINE_ITEMS.reduce(
     (sum, item) => sum + toNumber(responses.expenses[item.key] ?? ""),
     0
   );
+  const totalMiscExpenses = responses.miscExpenses.reduce(
+    (sum, item) => sum + toNumber(item.amount ?? ""),
+    0
+  );
+  const totalExpenses = totalFixedExpenses + totalMiscExpenses;
 
   const totalVehicleExpenses =
     VEHICLE_EXPENSE_ITEMS.reduce((sum, item) => sum + toNumber(responses.vehicleExpenses[item.key] ?? ""), 0) +
@@ -363,6 +421,18 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
         Please don&apos;t include Social Security Numbers here; you can note
         &quot;have EIN, will provide separately&quot; if you'd rather not
         type it in.
+      </p>
+
+      <p style={{ marginBottom: "1.25rem" }}>
+        <a
+          href="https://calendly.com/jbooker3-jlbtax/30min"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn"
+          style={{ fontSize: "0.85rem", padding: "0.5rem 1rem" }}
+        >
+          Book a Free Consultation
+        </a>
       </p>
 
       <p className="section-title">About your business</p>
@@ -541,6 +611,53 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
         </select>
       </div>
 
+      {responses.hasProfitLossStatement === "yes" && (
+        <div className="field-group">
+          <label className="field-label">Upload your profit &amp; loss statement</label>
+          <p style={{ fontSize: "0.8rem", color: "#5f5e5a", marginTop: 0, marginBottom: "0.5rem" }}>
+            If you upload a P&amp;L, you can skip typing in every expense
+            category below — we&apos;ll work from the document instead.
+          </p>
+          {responses.profitLossStatementFileName ? (
+            <p style={{ fontSize: "0.85rem", color: "#047E20", marginBottom: "0.5rem" }}>
+              Uploaded: {responses.profitLossStatementFileName.replace(/^\d+_PL_/, "")}
+              {" — "}
+              <button
+                type="button"
+                onClick={() => updateField("profitLossStatementFileName", "")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  color: "var(--navy)",
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                  font: "inherit",
+                }}
+              >
+                clear
+              </button>
+            </p>
+          ) : null}
+          <label className="btn btn-outline" style={{ display: "inline-block" }}>
+            {uploadingPL ? "Uploading..." : responses.profitLossStatementFileName ? "Upload a different file" : "Upload P&L statement"}
+            <input
+              type="file"
+              onChange={handleUploadProfitLoss}
+              disabled={uploadingPL}
+              style={{ display: "none" }}
+            />
+          </label>
+          {uploadError && (
+            <p style={{ color: "#a32d2d", fontSize: "0.8rem", marginTop: "0.5rem" }}>{uploadError}</p>
+          )}
+          <p style={{ fontSize: "0.75rem", color: "#5f5e5a", marginTop: "0.5rem" }}>
+            This uploads to the same secure Documents area shown on your main
+            dashboard.
+          </p>
+        </div>
+      )}
+
       <div className="amount-row">
         <label className="field-label">Gross receipts and sales</label>
         <input
@@ -577,8 +694,9 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
         Expenses
       </p>
       <p style={{ fontSize: "0.85rem", color: "#5f5e5a", marginTop: 0 }}>
-        Enter a rough dollar amount for anything that applies — leave the
-        rest blank. Exact totals can come from your records later.
+        {responses.profitLossStatementFileName
+          ? "You've uploaded a P&L statement above, so you can skip this section entirely if it already covers your expenses."
+          : "Enter a rough dollar amount for anything that applies — leave the rest blank. Exact totals can come from your records later."}
       </p>
 
       {EXPENSE_LINE_ITEMS.map((item) => (
@@ -592,7 +710,52 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
           />
         </div>
       ))}
-      <div className="amount-row total">
+
+      <p style={{ fontSize: "0.9rem", fontWeight: 600, marginTop: "1rem", marginBottom: "0.3rem" }}>
+        Not sure where an expense goes?
+      </p>
+      <p style={{ fontSize: "0.85rem", color: "#5f5e5a", marginTop: 0 }}>
+        Add it here with a short description and the amount — we&apos;ll
+        figure out where it belongs.
+      </p>
+
+      {responses.miscExpenses.map((item, index) => (
+        <div className="amount-row" key={index} style={{ gap: "0.5rem" }}>
+          <input
+            type="text"
+            value={item.description}
+            onChange={(e) => updateMiscExpense(index, "description", e.target.value)}
+            placeholder="Description"
+            style={{ flex: 1, textAlign: "left" }}
+          />
+          <input
+            type="text"
+            value={item.amount}
+            onChange={(e) => updateMiscExpense(index, "amount", e.target.value)}
+            placeholder="$"
+          />
+          <button
+            type="button"
+            onClick={() => removeMiscExpense(index)}
+            className="btn btn-outline"
+            style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem" }}
+            aria-label="Remove this expense"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+
+      <button
+        type="button"
+        onClick={addMiscExpense}
+        className="btn btn-outline"
+        style={{ marginTop: "0.5rem", fontSize: "0.85rem", padding: "0.5rem 1rem" }}
+      >
+        + Add an expense
+      </button>
+
+      <div className="amount-row total" style={{ marginTop: "1rem" }}>
         <label className="field-label">Total expenses</label>
         <span>${formatMoney(totalExpenses)}</span>
       </div>

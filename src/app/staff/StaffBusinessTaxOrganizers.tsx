@@ -125,7 +125,7 @@ export default function StaffBusinessTaxOrganizers() {
                     {org.attention_notes && <div>{org.attention_notes}</div>}
                   </div>
                 )}
-                <BusinessOrganizerDetail responses={org.responses} />
+                <BusinessOrganizerDetail responses={org.responses} userId={org.user_id} />
               </div>
             )}
           </div>
@@ -144,14 +144,39 @@ function Field({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
-function BusinessOrganizerDetail({ responses }: { responses: BusinessResponses }) {
+function BusinessOrganizerDetail({
+  responses,
+  userId,
+}: {
+  responses: BusinessResponses;
+  userId: string;
+}) {
+  const [plUrlState, setPlUrlState] = useState<"idle" | "loading" | "error">("idle");
+
+  async function openProfitLoss() {
+    if (!responses.profitLossStatementFileName) return;
+    setPlUrlState("loading");
+    const res = await fetch(
+      `/api/staff/documents?userId=${encodeURIComponent(userId)}&fileName=${encodeURIComponent(
+        responses.profitLossStatementFileName
+      )}`
+    );
+    const body = await res.json().catch(() => ({}));
+    setPlUrlState(res.ok ? "idle" : "error");
+    if (res.ok && body.url) {
+      window.open(body.url, "_blank");
+    }
+  }
+
   const filledExpenses = EXPENSE_LINE_ITEMS.filter(
     (item) => toNumber(responses.expenses?.[item.key]) > 0
   );
-  const totalExpenses = EXPENSE_LINE_ITEMS.reduce(
-    (sum, item) => sum + toNumber(responses.expenses?.[item.key]),
-    0
+  const filledMiscExpenses = (responses.miscExpenses ?? []).filter(
+    (item) => toNumber(item.amount) > 0
   );
+  const totalExpenses =
+    EXPENSE_LINE_ITEMS.reduce((sum, item) => sum + toNumber(responses.expenses?.[item.key]), 0) +
+    filledMiscExpenses.reduce((sum, item) => sum + toNumber(item.amount), 0);
 
   const grossIncome =
     toNumber(responses.grossReceiptsSales) -
@@ -192,6 +217,25 @@ function BusinessOrganizerDetail({ responses }: { responses: BusinessResponses }
 
       <p style={{ fontWeight: 600, margin: "0.5rem 0 0" }}>Income</p>
       <Field label="Has P&L statement" value={responses.hasProfitLossStatement} />
+      {responses.profitLossStatementFileName && (
+        <div>
+          <strong>P&amp;L uploaded:</strong>{" "}
+          <button
+            type="button"
+            onClick={openProfitLoss}
+            disabled={plUrlState === "loading"}
+            className="btn btn-outline"
+            style={{ padding: "0.2rem 0.6rem", fontSize: "0.75rem", marginLeft: "0.25rem" }}
+          >
+            {plUrlState === "loading"
+              ? "Opening..."
+              : `Download ${responses.profitLossStatementFileName.replace(/^\d+_PL_/, "")}`}
+          </button>
+          {plUrlState === "error" && (
+            <span style={{ color: "#a32d2d", marginLeft: "0.5rem" }}>Couldn&apos;t open file</span>
+          )}
+        </div>
+      )}
       <Field label="Gross receipts and sales" value={responses.grossReceiptsSales && `$${responses.grossReceiptsSales}`} />
       <Field label="Returns and allowances" value={responses.returnsAllowances && `$${responses.returnsAllowances}`} />
       <Field label="Cost of goods sold" value={responses.costOfGoodsSold && `$${responses.costOfGoodsSold}`} />
@@ -202,12 +246,18 @@ function BusinessOrganizerDetail({ responses }: { responses: BusinessResponses }
       )}
 
       <p style={{ fontWeight: 600, margin: "0.5rem 0 0" }}>Expenses</p>
-      {filledExpenses.length ? (
+      {filledExpenses.length || filledMiscExpenses.length ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
           {filledExpenses.map((item) => (
             <div key={item.key} style={{ display: "flex", justifyContent: "space-between", maxWidth: 360 }}>
               <span>{item.label}</span>
               <span>${responses.expenses[item.key]}</span>
+            </div>
+          ))}
+          {filledMiscExpenses.map((item, index) => (
+            <div key={`misc-${index}`} style={{ display: "flex", justifyContent: "space-between", maxWidth: 360 }}>
+              <span>{item.description || "(no description)"}</span>
+              <span>${item.amount}</span>
             </div>
           ))}
           <div
