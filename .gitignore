@@ -7,3 +7,7 @@ out
 .vercel
 *.log
 *.tsbuildinfo
+
+# Scratch/reference files not meant to be part of the repo
+brainstorming.txt
+Self Employed Form(Current).pdf
