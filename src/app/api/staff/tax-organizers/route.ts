@@ -31,14 +31,21 @@ export async function GET() {
     (usersData?.users ?? []).map((u) => [u.id, u.email ?? "Unknown"])
   );
 
-  const { data: profiles } = await admin.from("profiles").select("user_id, name");
-  const nameByUserId = new Map((profiles ?? []).map((p) => [p.user_id, p.name]));
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("user_id, name, first_name, last_name");
+  const profileByUserId = new Map((profiles ?? []).map((p) => [p.user_id, p]));
 
-  const withEmails = (organizers ?? []).map((org) => ({
-    ...org,
-    client_email: emailByUserId.get(org.user_id) ?? "Unknown",
-    client_name: nameByUserId.get(org.user_id) ?? null,
-  }));
+  const withEmails = (organizers ?? []).map((org) => {
+    const profile = profileByUserId.get(org.user_id);
+    return {
+      ...org,
+      client_email: emailByUserId.get(org.user_id) ?? "Unknown",
+      client_name: profile?.name ?? null,
+      client_first_name: profile?.first_name ?? null,
+      client_last_name: profile?.last_name ?? null,
+    };
+  });
 
   return NextResponse.json({ organizers: withEmails });
 }

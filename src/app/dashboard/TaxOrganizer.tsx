@@ -42,7 +42,8 @@ export type LifeChangeFlags = {
 };
 
 export type Responses = {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   address: string;
   filingStatus: string;
   nameOrAddressChange: string;
@@ -60,7 +61,8 @@ export type Responses = {
 };
 
 const EMPTY_RESPONSES: Responses = {
-  fullName: "",
+  firstName: "",
+  lastName: "",
   address: "",
   filingStatus: "",
   nameOrAddressChange: "",
@@ -209,15 +211,42 @@ export default function TaxOrganizer({ userId }: { userId: string }) {
       // directory and by Dropbox Sign for the signer name) in sync with
       // whatever name/address they enter here. This is a self-update on
       // their own row, allowed by the column-level grant on profiles.
-      if (responses.fullName || responses.address) {
+      // `name` stays in natural "First Last" order since Dropbox Sign's
+      // signer field expects that; the staff directory instead displays
+      // "Last, First" built from the separate columns.
+      if (responses.firstName || responses.lastName || responses.address) {
+        const combinedName = [responses.firstName, responses.lastName].filter(Boolean).join(" ");
         await supabase
           .from("profiles")
           .update({
-            name: responses.fullName || undefined,
+            name: combinedName || undefined,
+            first_name: responses.firstName || undefined,
+            last_name: responses.lastName || undefined,
             address: responses.address || undefined,
             updated_at: new Date().toISOString(),
           })
           .eq("user_id", userId);
+
+        // Also push "Last, First" into Supabase Auth's own display name,
+        // so it shows up meaningfully in the Supabase dashboard too, not
+        // just our own staff pages. Requires the service role key, so
+        // it goes through a small server route rather than direct from
+        // the browser. Best-effort — a failure here shouldn't block the
+        // organizer's own save from succeeding.
+        if (responses.firstName || responses.lastName) {
+          try {
+            await fetch("/api/profile/sync-display-name", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                firstName: responses.firstName,
+                lastName: responses.lastName,
+              }),
+            });
+          } catch (thrown) {
+            console.error("Display name sync failed:", thrown);
+          }
+        }
       }
     }, 1000);
 
@@ -334,13 +363,23 @@ export default function TaxOrganizer({ userId }: { userId: string }) {
 
       <p className="section-title">Personal &amp; filing info</p>
 
-      <div className="field-group">
-        <label className="field-label">Full legal name</label>
-        <input
-          type="text"
-          value={responses.fullName}
-          onChange={(e) => updateField("fullName", e.target.value)}
-        />
+      <div style={{ display: "flex", gap: "0.75rem" }}>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">Legal first name</label>
+          <input
+            type="text"
+            value={responses.firstName}
+            onChange={(e) => updateField("firstName", e.target.value)}
+          />
+        </div>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">Legal last name</label>
+          <input
+            type="text"
+            value={responses.lastName}
+            onChange={(e) => updateField("lastName", e.target.value)}
+          />
+        </div>
       </div>
 
       <div className="field-group">

@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { clientLabel } from "@/lib/clientLabel";
 
-type Client = { id: string; email: string | null };
+type Client = {
+  id: string;
+  email: string | null;
+  first_name: string | null;
+  last_name: string | null;
+};
 type Invoice = {
   id: string;
   user_id: string;
@@ -11,6 +17,8 @@ type Invoice = {
   status: string;
   created_at: string;
   client_email: string;
+  client_first_name: string | null;
+  client_last_name: string | null;
 };
 
 export default function StaffInvoices() {
@@ -91,7 +99,7 @@ export default function StaffInvoices() {
               <option value="">Select a client</option>
               {clients.map((c) => (
                 <option value={c.id} key={c.id}>
-                  {c.email ?? c.id}
+                  {clientLabel({ firstName: c.first_name, lastName: c.last_name, email: c.email }) || c.id}
                 </option>
               ))}
             </select>
@@ -133,7 +141,12 @@ export default function StaffInvoices() {
           invoices.map((inv) => (
             <div className="doc-row" key={inv.id}>
               <span>
-                {inv.client_email} — {inv.description} — $
+                {clientLabel({
+                  firstName: inv.client_first_name,
+                  lastName: inv.client_last_name,
+                  email: inv.client_email,
+                })}{" "}
+                — {inv.description} — $
                 {(inv.amount_cents / 100).toFixed(2)}
               </span>
               <span

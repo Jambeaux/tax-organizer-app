@@ -4,6 +4,8 @@ export type Profile = {
   user_id: string;
   email: string;
   name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   phone: string | null;
   address: string | null;
   is_business: boolean;
@@ -61,6 +63,8 @@ export async function getOrCreateProfile(
       user_id: userId,
       email,
       name,
+      first_name: null,
+      last_name: null,
       phone: null,
       address: null,
       is_business: false,

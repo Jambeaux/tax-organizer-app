@@ -40,10 +40,20 @@ export async function GET() {
     (usersData?.users ?? []).map((u) => [u.id, u.email ?? "Unknown"])
   );
 
-  const withEmails = (invoices ?? []).map((inv) => ({
-    ...inv,
-    client_email: emailByUserId.get(inv.user_id) ?? "Unknown",
-  }));
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("user_id, first_name, last_name");
+  const profileByUserId = new Map((profiles ?? []).map((p) => [p.user_id, p]));
+
+  const withEmails = (invoices ?? []).map((inv) => {
+    const profile = profileByUserId.get(inv.user_id);
+    return {
+      ...inv,
+      client_email: emailByUserId.get(inv.user_id) ?? "Unknown",
+      client_first_name: profile?.first_name ?? null,
+      client_last_name: profile?.last_name ?? null,
+    };
+  });
 
   return NextResponse.json({ invoices: withEmails });
 }

@@ -7,6 +7,7 @@ import {
   LIFE_CHANGE_FIELDS,
   type Responses,
 } from "@/app/dashboard/TaxOrganizer";
+import { clientLabel } from "@/lib/clientLabel";
 
 type OrganizerRow = {
   id: string;
@@ -19,6 +20,8 @@ type OrganizerRow = {
   updated_at: string;
   client_email: string;
   client_name: string | null;
+  client_first_name: string | null;
+  client_last_name: string | null;
 };
 
 const FILING_STATUS_LABELS: Record<string, string> = {
@@ -66,7 +69,11 @@ export default function StaffTaxOrganizers() {
               onClick={() => setExpandedId(expandedId === org.id ? null : org.id)}
             >
               <span>
-                {org.client_name ? `${org.client_name} — ${org.client_email}` : org.client_email}
+                {clientLabel({
+                  firstName: org.client_first_name,
+                  lastName: org.client_last_name,
+                  email: org.client_email,
+                })}
                 {" — last updated "}
                 {new Date(org.updated_at).toLocaleDateString()}
               </span>

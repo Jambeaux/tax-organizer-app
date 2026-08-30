@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { clientLabel } from "@/lib/clientLabel";
 
 type Client = {
   id: string;
   email: string | null;
   name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   status: "pending" | "approved";
   is_business: boolean;
 };
@@ -146,7 +149,7 @@ export default function StaffAccounts() {
           </p>
           {pending.map((c) => (
             <div className="doc-row" key={c.id}>
-              <span>{c.name ? `${c.name} — ${c.email}` : c.email}</span>
+              <span>{clientLabel({ firstName: c.first_name, lastName: c.last_name, email: c.email })}</span>
               <span style={{ display: "flex", gap: "0.5rem" }}>
                 <button
                   className="btn"
@@ -264,7 +267,7 @@ export default function StaffAccounts() {
           clients.map((c) => (
             <div className="doc-row" key={c.id}>
               <span>
-                {c.name ? `${c.name} — ${c.email}` : c.email}
+                {clientLabel({ firstName: c.first_name, lastName: c.last_name, email: c.email })}
                 {c.is_business ? " (business/self-employed)" : ""}
               </span>
               <span

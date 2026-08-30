@@ -26,7 +26,7 @@ export async function GET() {
 
   const { data: profiles } = await admin
     .from("profiles")
-    .select("user_id, name, status, is_business");
+    .select("user_id, name, first_name, last_name, status, is_business");
   const profileByUserId = new Map((profiles ?? []).map((p) => [p.user_id, p]));
 
   const clients = data.users
@@ -37,6 +37,8 @@ export async function GET() {
         id: u.id,
         email: u.email,
         name: profile?.name ?? null,
+        first_name: profile?.first_name ?? null,
+        last_name: profile?.last_name ?? null,
         status: profile?.status ?? "pending",
         is_business: profile?.is_business ?? false,
       };
