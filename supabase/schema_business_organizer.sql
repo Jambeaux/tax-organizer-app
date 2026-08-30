@@ -40,3 +40,9 @@ on business_tax_organizer_responses for update
 to authenticated
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
+
+-- RLS policies alone aren't sufficient — Postgres also checks plain table
+-- privileges before RLS ever runs. tax_organizer_responses worked without
+-- this line because it inherited default privileges from an earlier state
+-- of this project; being explicit here avoids relying on that.
+grant select, insert, update on business_tax_organizer_responses to authenticated;

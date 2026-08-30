@@ -398,6 +398,11 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
       setSubmitError(getSaveErrorMessage(error));
     } else {
       setStatus("submitted");
+      // A successful submit proves writes are working again — clear any
+      // stale autosave error banner left over from an earlier failure so
+      // it doesn't sit there confusingly next to "Submitted".
+      setSaveErrorMessage(null);
+      setSaveState("saved");
     }
   }
 
