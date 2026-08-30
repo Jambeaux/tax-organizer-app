@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getSaveErrorMessage } from "@/lib/saveError";
 
 // Every dollar-amount field is stored as a plain string (so the input can
 // be blank, and we're not fighting number-input quirks), and parsed with
@@ -228,7 +229,9 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
   const [attentionNotes, setAttentionNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [uploadingPL, setUploadingPL] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -272,19 +275,33 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
 
     saveTimer.current = setTimeout(async () => {
-      const { error } = await supabase
-        .from("business_tax_organizer_responses")
-        .upsert(
-          {
-            user_id: userId,
-            responses,
-            needs_attention: needsAttention,
-            attention_notes: attentionNotes,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" }
-        );
-      setSaveState(error ? "error" : "saved");
+      let error: unknown = null;
+      try {
+        const result = await supabase
+          .from("business_tax_organizer_responses")
+          .upsert(
+            {
+              user_id: userId,
+              responses,
+              needs_attention: needsAttention,
+              attention_notes: attentionNotes,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id" }
+          );
+        error = result.error;
+      } catch (thrown) {
+        error = thrown;
+      }
+
+      if (error) {
+        console.error("Business tax organizer autosave failed:", error);
+        setSaveErrorMessage(getSaveErrorMessage(error));
+        setSaveState("error");
+      } else {
+        setSaveErrorMessage(null);
+        setSaveState("saved");
+      }
     }, 1000);
 
     return () => {
@@ -356,20 +373,32 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
 
   async function handleSubmit() {
     setSubmitting(true);
-    const { error } = await supabase.from("business_tax_organizer_responses").upsert(
-      {
-        user_id: userId,
-        responses,
-        needs_attention: needsAttention,
-        attention_notes: attentionNotes,
-        status: "submitted",
-        submitted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" }
-    );
+    setSubmitError(null);
+    let error: unknown = null;
+    try {
+      const result = await supabase.from("business_tax_organizer_responses").upsert(
+        {
+          user_id: userId,
+          responses,
+          needs_attention: needsAttention,
+          attention_notes: attentionNotes,
+          status: "submitted",
+          submitted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+      error = result.error;
+    } catch (thrown) {
+      error = thrown;
+    }
     setSubmitting(false);
-    if (!error) setStatus("submitted");
+    if (error) {
+      console.error("Business tax organizer submit failed:", error);
+      setSubmitError(getSaveErrorMessage(error));
+    } else {
+      setStatus("submitted");
+    }
   }
 
   if (loading) return null;
@@ -949,6 +978,10 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
         complete.
       </p>
 
+      {submitError && (
+        <p style={{ color: "#a32d2d", fontSize: "0.85rem", marginTop: "0.75rem" }}>{submitError}</p>
+      )}
+
       <div
         style={{
           display: "flex",
@@ -960,7 +993,7 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
         <span className="save-status">
           {saveState === "saving" && "Saving..."}
           {saveState === "saved" && "All changes saved"}
-          {saveState === "error" && "Couldn't save — check your connection"}
+          {saveState === "error" && (saveErrorMessage || "Couldn't save — check your connection")}
         </span>
         <button className="btn" onClick={handleSubmit} disabled={submitting} type="button">
           {submitting ? "Submitting..." : status === "submitted" ? "Re-submit" : "Submit to JLB Tax"}
