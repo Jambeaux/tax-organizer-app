@@ -298,19 +298,19 @@ export default function TaxOrganizer({ userId }: { userId: string }) {
     setSubmitError(null);
     let error: unknown = null;
     try {
-      const result = await supabase.from("tax_organizer_responses").upsert(
-        {
-          user_id: userId,
+      const res = await fetch("/api/tax-organizer/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           responses,
-          needs_attention: needsAttention,
-          attention_notes: attentionNotes,
-          status: "submitted",
-          submitted_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" }
-      );
-      error = result.error;
+          needsAttention,
+          attentionNotes,
+        }),
+      });
+      if (!res.ok) {
+        const resBody = await res.json().catch(() => ({}));
+        error = new Error(resBody.error || `Request failed (${res.status})`);
+      }
     } catch (thrown) {
       error = thrown;
     }

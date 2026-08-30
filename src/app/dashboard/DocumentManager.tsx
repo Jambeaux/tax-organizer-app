@@ -40,17 +40,20 @@ export default function DocumentManager({ userId }: { userId: string }) {
     setUploading(true);
     setError(null);
 
-    const { error } = await supabase.storage
-      .from("documents")
-      .upload(`${userId}/${Date.now()}_${file.name}`, file, {
-        upsert: false,
-      });
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch("/api/documents/upload", {
+      method: "POST",
+      body: formData,
+    });
 
     setUploading(false);
     e.target.value = "";
 
-    if (error) {
-      setError(error.message);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error || "Upload failed");
     } else {
       loadFiles();
     }

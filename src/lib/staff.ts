@@ -3,7 +3,7 @@
 // variable. Add or remove staff by editing STAFF_EMAILS in Vercel and
 // redeploying.
 
-function getStaffEmails(): string[] {
+export function getStaffEmails(): string[] {
   return (process.env.STAFF_EMAILS ?? "")
     .split(",")
     .map((email) => email.trim().toLowerCase())

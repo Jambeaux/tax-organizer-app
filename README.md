@@ -364,6 +364,68 @@ Supabase's SQL Editor:
 update profiles set status = 'approved' where status = 'pending';
 ```
 
+## Milestone 8 — staff-initiated signature requests, and staff email notifications
+
+Two related changes, both about staff staying on top of client activity
+without having to keep refreshing the dashboard.
+
+**Signature requests moved to the staff side.** Previously a client could
+upload a document and click "Request signature" on their own upload —
+backwards, since a client can't meaningfully send themselves something
+to sign. Now:
+
+- The client dashboard's Documents card is upload/download/delete only
+  (`src/app/dashboard/DocumentManager.tsx`) — no signature button.
+- Staff get a new **"Send a document for signature"** card at the top of
+  `/staff` (`src/app/staff/StaffSignatureRequests.tsx`): pick a client
+  from a dropdown, choose a file, and it uploads straight into that
+  client's own secure Documents folder and emails them a Dropbox Sign
+  link to review and sign — addressed to the client, not the staff
+  member. The same card lists every signature request sent so far and
+  its status.
+- New server route `POST /api/staff/sign/request` does the actual work
+  (staff-only; uses the service-role key to write into the client's
+  storage folder, since the client's own RLS policy only allows them to
+  write to their own folder from their own session).
+
+**Staff email notifications.** Two events now send an email to every
+address in `STAFF_EMAILS`:
+
+- The first time a client submits their personal or business tax
+  organizer (re-submitting after edits does **not** re-notify — only
+  the draft → submitted transition does).
+- Every time a client uploads a document (no "first only" limit here —
+  every upload notifies).
+
+This required moving both the organizer submit actions and the document
+upload action from direct browser-to-Supabase calls into small server
+routes (`POST /api/tax-organizer/submit`, `POST
+/api/business-tax-organizer/submit`, `POST /api/documents/upload`) so
+there's a server-side place to send the email from. Permissions are
+unchanged — these routes use the same request-scoped, RLS-bound
+Supabase client the browser was already using, so a client still can
+only read/write their own rows and their own storage folder.
+
+Notifications are sent via `src/lib/mail.ts` using
+[Nodemailer](https://nodemailer.com/) over plain SMTP — reusing the same
+SiteGround webmail mailbox already set up as Supabase Auth's custom SMTP
+provider (see Milestone 6), so there's no second email vendor to
+configure. Add these to Vercel's environment variables (and your local
+`.env.local`):
+
+```
+SMTP_HOST=          # e.g. mail.jlbtax.com (SiteGround webmail server)
+SMTP_PORT=465       # 465 for implicit TLS, 587 for STARTTLS
+SMTP_USER=          # full mailbox address, e.g. notifications@jlbtax.com
+SMTP_PASSWORD=      # that mailbox's password
+SMTP_FROM=          # optional — defaults to SMTP_USER if unset
+```
+
+If these aren't set, notification emails are silently skipped (logged
+to the server console) rather than breaking a client's submit or
+upload — a mail misconfiguration should never block the client-facing
+action that triggered it.
+
 ## Roadmap
 
 - [x] Milestone 1 — login, dashboard, secure document upload/download
@@ -375,6 +437,7 @@ update profiles set status = 'approved' where status = 'pending';
 - [x] A staff-facing view of submitted tax organizer responses
 - [x] Milestone 6 — accounts/approval, invites, business organizer, needs-attention flag, personalized Dropbox Sign
 - [x] Milestone 7 — CAPTCHA on sign-in, replacing manual account approval
+- [x] Milestone 8 — staff-initiated signature requests, staff email notifications on submit/upload
 - [ ] "Get started" button on the main site links here
 
 ## A note on security
