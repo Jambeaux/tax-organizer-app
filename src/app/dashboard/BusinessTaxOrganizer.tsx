@@ -332,20 +332,25 @@ export default function BusinessTaxOrganizer({ userId }: { userId: string }) {
     setUploadingPL(true);
     setUploadError(null);
 
-    const storedName = `${Date.now()}_PL_${file.name}`;
-    const { error } = await supabase.storage
-      .from("documents")
-      .upload(`${userId}/${storedName}`, file, { upsert: false });
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch("/api/business-tax-organizer/upload-pl", {
+      method: "POST",
+      body: formData,
+    });
 
     setUploadingPL(false);
     e.target.value = "";
 
-    if (error) {
-      setUploadError(error.message);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setUploadError(body.error || "Upload failed");
       return;
     }
 
-    updateField("profitLossStatementFileName", storedName);
+    const body = await res.json();
+    updateField("profitLossStatementFileName", body.storedName);
   }
 
   function addMiscExpense() {
