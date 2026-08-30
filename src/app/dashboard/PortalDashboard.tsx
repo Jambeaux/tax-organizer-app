@@ -35,10 +35,7 @@ export default function PortalDashboard({
         </a>
       </div>
 
-      <DocumentManager
-        userId={userId}
-        onSignatureRequested={() => setRefreshKey((k) => k + 1)}
-      />
+      <DocumentManager userId={userId} />
       <SignatureRequests userId={userId} refreshKey={refreshKey} />
       <PaymentRequests userId={userId} refreshKey={refreshKey} />
       <TaxOrganizer userId={userId} />

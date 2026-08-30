@@ -8,18 +8,11 @@ type FileRow = {
   id: string | null;
 };
 
-export default function DocumentManager({
-  userId,
-  onSignatureRequested,
-}: {
-  userId: string;
-  onSignatureRequested?: () => void;
-}) {
+export default function DocumentManager({ userId }: { userId: string }) {
   const supabase = createClient();
   const [files, setFiles] = useState<FileRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [requestingName, setRequestingName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadFiles = useCallback(async () => {
@@ -75,27 +68,6 @@ export default function DocumentManager({
     window.open(data.signedUrl, "_blank");
   }
 
-  async function handleRequestSignature(name: string) {
-    setRequestingName(name);
-    setError(null);
-
-    const res = await fetch("/api/sign/request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ documentName: name }),
-    });
-
-    setRequestingName(null);
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error ?? "Could not send document for signature");
-      return;
-    }
-
-    onSignatureRequested?.();
-  }
-
   async function handleDelete(name: string) {
     const { error } = await supabase.storage
       .from("documents")
@@ -143,14 +115,6 @@ export default function DocumentManager({
                 onClick={() => handleDownload(file.name)}
               >
                 Download
-              </button>
-              <button
-                className="btn btn-outline"
-                style={{ padding: "0.3rem 0.8rem", fontSize: "0.8rem" }}
-                disabled={requestingName === file.name}
-                onClick={() => handleRequestSignature(file.name)}
-              >
-                {requestingName === file.name ? "Sending..." : "Request signature"}
               </button>
               <button
                 className="btn btn-outline"

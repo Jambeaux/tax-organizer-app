@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isStaffEmail } from "@/lib/staff";
 import StaffAccounts from "./StaffAccounts";
 import StaffInvoices from "./StaffInvoices";
+import StaffSignatureRequests from "./StaffSignatureRequests";
 import StaffTaxOrganizers from "./StaffTaxOrganizers";
 import StaffBusinessTaxOrganizers from "./StaffBusinessTaxOrganizers";
 
@@ -45,6 +46,7 @@ export default async function StaffPage() {
 
       <StaffAccounts />
       <StaffInvoices />
+      <StaffSignatureRequests />
       <StaffTaxOrganizers />
       <StaffBusinessTaxOrganizers />
     </div>
