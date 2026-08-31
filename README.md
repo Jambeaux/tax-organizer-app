@@ -426,6 +426,62 @@ to the server console) rather than breaking a client's submit or
 upload — a mail misconfiguration should never block the client-facing
 action that triggered it.
 
+## Milestone 9 — interactive signature field placement, email branding
+
+Two follow-ups to Milestone 8's staff-initiated signature requests.
+
+**Field placement.** Sending a document used to call Dropbox Sign's plain
+`signatureRequestSend` API directly with no field information — no
+editor ever appeared for staff to place a signature field, because that
+API has no such editor. Getting one requires Dropbox Sign's **Embedded
+Requesting** flow instead:
+
+1. `POST /api/staff/sign/request` now uploads the file (unchanged) and
+   creates an **unclaimed draft** via `UnclaimedDraftApi
+   .unclaimedDraftCreateEmbedded(...)`, returning a `claimUrl` instead
+   of a finished signature request.
+2. `StaffSignatureRequests.tsx` opens that `claimUrl` in Dropbox Sign's
+   own embedded editor (via the `hellosign-embedded` npm package) —
+   staff drag a signature/date field onto the document there, then
+   click "Continue," which is what actually sends it.
+3. Because the real signature request doesn't exist until that
+   "Continue" click, the corresponding `signature_requests` row can no
+   longer be inserted synchronously when staff hits our own "Send"
+   button. Instead, `src/app/api/sign/webhook/route.ts` now listens for
+   Dropbox Sign's `signature_request_sent` event and inserts the row
+   then, matching the client by the signer's email address. The staff
+   list refreshes itself a couple seconds after the editor reports
+   "sent" to give that webhook time to land.
+
+**Setup required:**
+
+1. In your Dropbox Sign account, go to Settings → API → your app (or
+   create one if you don't have one) and copy its **Client ID**. Set it
+   as `NEXT_PUBLIC_DROPBOX_SIGN_CLIENT_ID` in Vercel (and `.env.local`
+   for local dev).
+2. On that same app's settings, add `portal.jlbtax.com` (and
+   `localhost` if you'll test locally) under **allowed domains** — the
+   embedded editor refuses to load on a domain that isn't listed there.
+3. Run `supabase/schema_signature_requests_unique.sql` once in the
+   Supabase SQL Editor — it adds a unique constraint on
+   `dropbox_sign_request_id` that the webhook's new upsert needs.
+
+**Email branding.** Signature request emails weren't showing JLB Tax &
+Bookkeeping as the sender. The `message` text sent with each request
+already names the company ("JLB Tax & Bookkeeping has sent you a
+document..."), but the visible "From" name in the recipient's inbox
+comes from your Dropbox Sign **account name** and **API app name**, not
+from anything this code controls — Dropbox Sign doesn't expose a
+"sender name" field over the API. To fix it:
+
+1. In Dropbox Sign, go to Settings → Account and confirm the Name field
+   is "JLB Tax & Bookkeeping" (or your preferred display name) rather
+   than a personal name.
+2. On the same API app used above (Settings → API → your app), set its
+   **App Name** to "JLB Tax & Bookkeeping" too, and optionally upload a
+   logo under that app's branding options — it'll show up in the
+   embedded editor and signing page.
+
 ## Roadmap
 
 - [x] Milestone 1 — login, dashboard, secure document upload/download
@@ -438,6 +494,7 @@ action that triggered it.
 - [x] Milestone 6 — accounts/approval, invites, business organizer, needs-attention flag, personalized Dropbox Sign
 - [x] Milestone 7 — CAPTCHA on sign-in, replacing manual account approval
 - [x] Milestone 8 — staff-initiated signature requests, staff email notifications on submit/upload
+- [x] Milestone 9 — interactive signature field placement (Embedded Requesting), email branding fix
 - [ ] "Get started" button on the main site links here
 
 ## A note on security

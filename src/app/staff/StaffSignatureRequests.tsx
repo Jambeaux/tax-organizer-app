@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import HelloSign from "hellosign-embedded";
 import { clientLabel } from "@/lib/clientLabel";
 
 type Client = {
@@ -28,7 +29,23 @@ export default function StaffSignatureRequests() {
   const [clientId, setClientId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
+  const [preparingFields, setPreparingFields] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const helloSignClient = useRef<HelloSign | null>(null);
+
+  function getHelloSignClient(): HelloSign {
+    if (!helloSignClient.current) {
+      const client = new HelloSign();
+      // Registered once for the lifetime of this client instance —
+      // handleSend just calls client.open(...) on subsequent sends rather
+      // than re-registering listeners each time.
+      client.on("send", () => handleEditorSent());
+      client.on("close", () => handleEditorClosed());
+      client.on("cancel", () => handleEditorClosed());
+      helloSignClient.current = client;
+    }
+    return helloSignClient.current;
+  }
 
   async function loadAll() {
     setLoading(true);
@@ -56,6 +73,14 @@ export default function StaffSignatureRequests() {
       return;
     }
 
+    const clientIdForDropboxSign = process.env.NEXT_PUBLIC_DROPBOX_SIGN_CLIENT_ID;
+    if (!clientIdForDropboxSign) {
+      setError(
+        "Signature requests aren't configured yet — NEXT_PUBLIC_DROPBOX_SIGN_CLIENT_ID is missing."
+      );
+      return;
+    }
+
     setSending(true);
     const formData = new FormData();
     formData.append("clientUserId", clientId);
@@ -73,9 +98,34 @@ export default function StaffSignatureRequests() {
       return;
     }
 
+    const body = await res.json();
+    if (!body.claimUrl) {
+      setError("Dropbox Sign didn't return an editor link.");
+      return;
+    }
+
+    // Hand off to Dropbox Sign's own embedded editor so the staff member
+    // can drag a signature/date field onto the document before it
+    // actually sends. It doesn't finish sending until they click
+    // "Continue" inside that editor — the "send" event below fires then.
+    setPreparingFields(true);
+    getHelloSignClient().open(body.claimUrl, {
+      clientId: clientIdForDropboxSign,
+    });
+  }
+
+  function handleEditorSent() {
+    setPreparingFields(false);
     setClientId("");
     setFile(null);
-    loadAll();
+    // Dropbox Sign fires our webhook (signature_request_sent) to actually
+    // record the request in our own database — that happens a moment
+    // after this "send" event, so give it a beat before refreshing.
+    setTimeout(loadAll, 2500);
+  }
+
+  function handleEditorClosed() {
+    setPreparingFields(false);
   }
 
   if (loading) {
@@ -87,8 +137,10 @@ export default function StaffSignatureRequests() {
       <div className="card" style={{ marginBottom: "1.25rem" }}>
         <p className="section-title">Send a document for signature</p>
         <p style={{ fontSize: "0.85rem", color: "#5f5e5a", marginTop: 0 }}>
-          Uploads the document to the client's own secure Documents area and
-          emails them a Dropbox Sign link to review and sign it.
+          Uploads the document to the client's own secure Documents area,
+          then opens Dropbox Sign's editor so you can drag a signature and
+          date field onto it. Click Continue in that editor to actually
+          send it — nothing goes to the client until then.
         </p>
 
         {error && <p style={{ color: "#a32d2d", fontSize: "0.85rem" }}>{error}</p>}
@@ -114,8 +166,12 @@ export default function StaffSignatureRequests() {
             />
           </div>
 
-          <button className="btn" type="submit" disabled={sending}>
-            {sending ? "Sending..." : "Send for signature"}
+          <button className="btn" type="submit" disabled={sending || preparingFields}>
+            {sending
+              ? "Uploading..."
+              : preparingFields
+                ? "Waiting on editor..."
+                : "Send for signature"}
           </button>
         </form>
       </div>

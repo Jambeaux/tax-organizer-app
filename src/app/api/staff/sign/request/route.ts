@@ -8,11 +8,19 @@ import os from "os";
 import path from "path";
 import crypto from "crypto";
 
-// Staff-only: uploads a document to a specific client's Storage folder and
-// sends it out for e-signature via Dropbox Sign, addressed to that client's
-// own email — not the staff member's. This replaces the old client-side
-// "request signature on my own upload" flow, which had the direction
-// backwards (a client can't meaningfully send themselves something to sign).
+// Staff-only: uploads a document to a specific client's Storage folder,
+// then creates a Dropbox Sign "unclaimed draft" (Embedded Requesting) for
+// it and hands back a claim_url. The staff member's browser opens that
+// claim_url in Dropbox Sign's embedded editor, where they drag a
+// signature/date field onto the document themselves before it actually
+// sends — the plain signatureRequestSend API has no such editor, which is
+// why nothing used to show up for field placement.
+//
+// Because the request isn't actually created until the staff member
+// finishes in that editor, we do NOT insert into signature_requests here
+// — there's no dropbox_sign_request_id yet. That row gets created by the
+// webhook when Dropbox Sign fires signature_request_sent (see
+// src/app/api/sign/webhook/route.ts).
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -21,6 +29,9 @@ export async function POST(request: Request) {
 
   if (!staffUser || !isStaffEmail(staffUser.email)) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+  if (!staffUser.email) {
+    return NextResponse.json({ error: "Your account has no email on file" }, { status: 400 });
   }
 
   const formData = await request.formData();
@@ -70,7 +81,7 @@ export async function POST(request: Request) {
   }
 
   // Random temp filename, not derived from the uploaded filename — same
-  // belt-and-suspenders reasoning as the original client-facing route.
+  // belt-and-suspenders reasoning as before.
   const tmpPath = path.join(os.tmpdir(), crypto.randomUUID());
   fs.writeFileSync(tmpPath, fileBuffer);
   const fileStream = fs.createReadStream(tmpPath);
@@ -86,12 +97,26 @@ export async function POST(request: Request) {
   const apiKey = isLive
     ? process.env.DROPBOX_SIGN_LIVE_KEY
     : process.env.DROPBOX_SIGN_TEST_KEY;
+  const clientId = process.env.NEXT_PUBLIC_DROPBOX_SIGN_CLIENT_ID;
 
-  const signatureRequestApi = new DropboxSign.SignatureRequestApi();
-  signatureRequestApi.username = apiKey!;
+  if (!clientId) {
+    fs.unlink(tmpPath, () => {});
+    return NextResponse.json(
+      { error: "NEXT_PUBLIC_DROPBOX_SIGN_CLIENT_ID is not configured on the server" },
+      { status: 500 }
+    );
+  }
 
-  const sendRequest: DropboxSign.SignatureRequestSendRequest = {
-    title: file.name,
+  const unclaimedDraftApi = new DropboxSign.UnclaimedDraftApi();
+  unclaimedDraftApi.username = apiKey!;
+
+  const draftRequest: DropboxSign.UnclaimedDraftCreateEmbeddedRequest = {
+    clientId,
+    requesterEmailAddress: staffUser.email,
+    // There's no separate "title" field on an unclaimed draft (unlike
+    // signatureRequestSend) — Dropbox Sign uses the uploaded file's own
+    // name as the resulting request's title, which is what the webhook
+    // handler and staff list below key off of.
     subject: `Please sign: ${file.name}`,
     message: "JLB Tax & Bookkeeping has sent you a document to review and sign.",
     signers: [
@@ -102,11 +127,14 @@ export async function POST(request: Request) {
     ],
     files: [fileStream],
     testMode: !isLive,
+    // Staff already picked the client and file on our own page — no need
+    // to let the embedded editor offer to change either.
+    forceSignerPage: false,
   };
 
   let response;
   try {
-    response = await signatureRequestApi.signatureRequestSend(sendRequest);
+    response = await unclaimedDraftApi.unclaimedDraftCreateEmbedded(draftRequest);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Dropbox Sign error";
     return NextResponse.json({ error: message }, { status: 502 });
@@ -114,29 +142,14 @@ export async function POST(request: Request) {
     fs.unlink(tmpPath, () => {});
   }
 
-  const dropboxSignRequestId = response.body.signatureRequest?.signatureRequestId;
+  const claimUrl = response.body.unclaimedDraft?.claimUrl;
 
-  if (!dropboxSignRequestId) {
+  if (!claimUrl) {
     return NextResponse.json(
-      { error: "Dropbox Sign did not return a request id" },
+      { error: "Dropbox Sign did not return a claim URL" },
       { status: 502 }
     );
   }
 
-  const { data: row, error: insertError } = await admin
-    .from("signature_requests")
-    .insert({
-      user_id: clientUserId,
-      document_name: file.name,
-      dropbox_sign_request_id: dropboxSignRequestId,
-      status: "pending",
-    })
-    .select()
-    .single();
-
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ signatureRequest: row });
+  return NextResponse.json({ claimUrl });
 }
