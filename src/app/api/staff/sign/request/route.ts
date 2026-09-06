@@ -136,7 +136,27 @@ export async function POST(request: Request) {
   try {
     response = await unclaimedDraftApi.unclaimedDraftCreateEmbedded(draftRequest);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Dropbox Sign error";
+    // @dropbox/sign wraps every failed HTTP call in a generic HttpError
+    // whose .message is always literally "HTTP request failed" — the
+    // actual reason (bad API key, plan doesn't allow live API sends,
+    // domain not verified, etc.) is on .body.error.error_msg instead.
+    // Log the full thing server-side and surface the real message to
+    // the client instead of the useless generic one.
+    const httpError = err as {
+      message?: string;
+      statusCode?: number;
+      body?: { error?: { errorMsg?: string; errorName?: string } };
+    };
+    console.error(
+      "Dropbox Sign unclaimedDraftCreateEmbedded failed:",
+      httpError.statusCode,
+      JSON.stringify(httpError.body)
+    );
+    const message =
+      httpError.body?.error?.errorMsg ||
+      httpError.body?.error?.errorName ||
+      httpError.message ||
+      "Dropbox Sign error";
     return NextResponse.json({ error: message }, { status: 502 });
   } finally {
     fs.unlink(tmpPath, () => {});
