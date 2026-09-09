@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import HelloSign from "hellosign-embedded";
+import { useEffect, useState } from "react";
 import { clientLabel } from "@/lib/clientLabel";
 
 type Client = {
@@ -22,6 +21,33 @@ type SignatureRequestRow = {
   client_last_name: string | null;
 };
 
+const SIGNWELL_SCRIPT_URL = "https://static.signwell.com/assets/embedded.js";
+
+// Cached across the whole app lifetime (not per-component-mount) so the
+// script is only ever fetched once, however many times staff send a
+// document for signature.
+let signWellScriptPromise: Promise<void> | null = null;
+
+function loadSignWellScript(): Promise<void> {
+  if (typeof window !== "undefined" && window.SignWellEmbed) {
+    return Promise.resolve();
+  }
+  if (signWellScriptPromise) return signWellScriptPromise;
+
+  signWellScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = SIGNWELL_SCRIPT_URL;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      signWellScriptPromise = null;
+      reject(new Error("Failed to load the SignWell editor script"));
+    };
+    document.body.appendChild(script);
+  });
+  return signWellScriptPromise;
+}
+
 export default function StaffSignatureRequests() {
   const [clients, setClients] = useState<Client[]>([]);
   const [requests, setRequests] = useState<SignatureRequestRow[]>([]);
@@ -31,21 +57,6 @@ export default function StaffSignatureRequests() {
   const [sending, setSending] = useState(false);
   const [preparingFields, setPreparingFields] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const helloSignClient = useRef<HelloSign | null>(null);
-
-  function getHelloSignClient(): HelloSign {
-    if (!helloSignClient.current) {
-      const client = new HelloSign();
-      // Registered once for the lifetime of this client instance —
-      // handleSend just calls client.open(...) on subsequent sends rather
-      // than re-registering listeners each time.
-      client.on("send", () => handleEditorSent());
-      client.on("close", () => handleEditorClosed());
-      client.on("cancel", () => handleEditorClosed());
-      helloSignClient.current = client;
-    }
-    return helloSignClient.current;
-  }
 
   async function loadAll() {
     setLoading(true);
@@ -73,14 +84,6 @@ export default function StaffSignatureRequests() {
       return;
     }
 
-    const clientIdForDropboxSign = process.env.NEXT_PUBLIC_DROPBOX_SIGN_CLIENT_ID;
-    if (!clientIdForDropboxSign) {
-      setError(
-        "Signature requests aren't configured yet — NEXT_PUBLIC_DROPBOX_SIGN_CLIENT_ID is missing."
-      );
-      return;
-    }
-
     setSending(true);
     const formData = new FormData();
     formData.append("clientUserId", clientId);
@@ -99,33 +102,49 @@ export default function StaffSignatureRequests() {
     }
 
     const body = await res.json();
-    if (!body.claimUrl) {
-      setError("Dropbox Sign didn't return an editor link.");
+    if (!body.embeddedEditUrl) {
+      setError("SignWell didn't return an editor link.");
       return;
     }
 
-    // Hand off to Dropbox Sign's own embedded editor so the staff member
-    // can drag a signature/date field onto the document before it
-    // actually sends. It doesn't finish sending until they click
-    // "Continue" inside that editor — the "send" event below fires then.
+    // Hand off to SignWell's own embedded editor so the staff member can
+    // drag a signature/date field onto the document before it actually
+    // sends. It doesn't finish sending until they click "Continue" inside
+    // that editor — the "completed" event below fires then.
     setPreparingFields(true);
-    getHelloSignClient().open(body.claimUrl, {
-      clientId: clientIdForDropboxSign,
-    });
-  }
+    try {
+      await loadSignWellScript();
+    } catch {
+      setPreparingFields(false);
+      setError("Could not load the SignWell editor. Check your connection and try again.");
+      return;
+    }
 
-  function handleEditorSent() {
-    setPreparingFields(false);
-    setClientId("");
-    setFile(null);
-    // Dropbox Sign fires our webhook (signature_request_sent) to actually
-    // record the request in our own database — that happens a moment
-    // after this "send" event, so give it a beat before refreshing.
-    setTimeout(loadAll, 2500);
-  }
+    if (!window.SignWellEmbed) {
+      setPreparingFields(false);
+      setError("SignWell editor failed to load.");
+      return;
+    }
 
-  function handleEditorClosed() {
-    setPreparingFields(false);
+    new window.SignWellEmbed({
+      url: body.embeddedEditUrl,
+      events: {
+        completed: () => {
+          setPreparingFields(false);
+          setClientId("");
+          setFile(null);
+          // The signature_requests row already exists (created
+          // synchronously when we asked SignWell for this editor link),
+          // so it'll show up right away — its status just updates from
+          // "draft" to "pending" a moment later once our webhook hears
+          // about it.
+          loadAll();
+        },
+        closed: () => {
+          setPreparingFields(false);
+        },
+      },
+    }).open();
   }
 
   if (loading) {
@@ -138,7 +157,7 @@ export default function StaffSignatureRequests() {
         <p className="section-title">Send a document for signature</p>
         <p style={{ fontSize: "0.85rem", color: "#5f5e5a", marginTop: 0 }}>
           Uploads the document to the client's own secure Documents area,
-          then opens Dropbox Sign's editor so you can drag a signature and
+          then opens SignWell's editor so you can drag a signature and
           date field onto it. Click Continue in that editor to actually
           send it — nothing goes to the client until then.
         </p>

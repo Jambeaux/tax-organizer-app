@@ -9,10 +9,9 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@dropbox/sign": "^1.6.0",
+    "@signwell/node-sdk": "^0.1.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
-    "hellosign-embedded": "^2.12.3",
     "next": "^16.2.12",
     "nodemailer": "^9.0.6",
     "square": "^45.0.1",

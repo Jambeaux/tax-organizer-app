@@ -428,6 +428,11 @@ action that triggered it.
 
 ## Milestone 9 — interactive signature field placement, email branding
 
+**Superseded by Milestone 10** — the app no longer uses Dropbox Sign at
+all (switched to SignWell, see below). This section is kept as a
+historical record of what shipped at the time; don't follow its setup
+steps for a fresh install.
+
 Two follow-ups to Milestone 8's staff-initiated signature requests.
 
 **Field placement.** Sending a document used to call Dropbox Sign's plain
@@ -482,19 +487,89 @@ from anything this code controls — Dropbox Sign doesn't expose a
    logo under that app's branding options — it'll show up in the
    embedded editor and signing page.
 
+## Milestone 10 — switched e-signature provider from Dropbox Sign to SignWell
+
+Milestone 9's interactive field-placement editor only worked on live
+(non-test) Dropbox Sign requests with their **Standard API plan or
+higher** (~$250–300/month) — a plan requirement that only became
+apparent once live sending was actually tried, since it works fine in
+test mode on any plan. Rather than pay for that (or for Adobe Acrobat
+Sign, whose API access requires an Enterprise contract starting around
+$1,000+/year with no self-serve option), the app now uses **SignWell**
+instead, which includes the equivalent "Embedded Requesting" editor at
+every tier, including its free/pay-as-you-go plan — SOC 2 Type II and
+HIPAA compliant, no monthly minimum.
+
+**What changed:**
+
+- `@dropbox/sign` and `hellosign-embedded` are gone; `@signwell/node-sdk`
+  (SignWell's official TypeScript SDK) replaces them.
+- `POST /api/staff/sign/request` now calls SignWell's
+  `Embedded.createRequestingDocument(...)` helper, uploading the file as
+  base64 directly in the request (no temp file, no separate storage
+  round-trip needed for SignWell itself — the copy in the client's own
+  Documents folder is separate and still happens as before). SignWell
+  hands back a real document `id` immediately, even before staff finish
+  placing fields — a difference from Dropbox Sign's "unclaimed draft"
+  model, which had no real ID until claimed.
+- Because that ID exists right away, the `signature_requests` row is
+  inserted synchronously in that same route (`status: "draft"`) instead
+  of waiting on a webhook. `src/app/api/sign/webhook/route.ts` now just
+  updates that row's status as SignWell posts `document_sent` →
+  `"pending"`, `document_completed` → `"signed"`, or `document_declined`
+  → `"declined"`.
+- `StaffSignatureRequests.tsx` loads SignWell's embedded editor via a
+  plain `<script>` tag (`https://static.signwell.com/assets/embedded.js`)
+  rather than an npm package — SignWell doesn't ship one. A new ambient
+  type declaration (`src/types/signwell-embed.d.ts`) covers the global
+  `window.SignWellEmbed` class it attaches, since there's no official or
+  community `@types` package for it either.
+- The `signature_requests.dropbox_sign_request_id` column is renamed to
+  `external_request_id` (see `supabase/schema_signature_requests_signwell.sql`)
+  since it now holds a SignWell document ID, not a Dropbox Sign one.
+- Unlike Dropbox Sign, SignWell needs **no client ID and no domain
+  allowlisting** for the embedded editor to work — one API key covers
+  everything, which simplifies setup considerably.
+
+**Setup required:**
+
+1. Create a free SignWell account at [signwell.com](https://www.signwell.com/),
+   then get an API key from Settings → API (or
+   [signwell.com/app/api-upgrade](https://www.signwell.com/app/api-upgrade)).
+   Set it as `SIGNWELL_API_KEY` in Vercel (and `.env.local` for local
+   dev).
+2. Register the webhook once — run this from a terminal (swap in your
+   real API key, and once deployed, the real callback URL):
+   ```
+   curl -X POST https://www.signwell.com/api/v1/hooks \
+     -H "X-Api-Key: [your api key]" -H "Content-Type: application/json" \
+     -d '{"callback_url": "https://portal.jlbtax.com/api/sign/webhook"}'
+   ```
+   The response's `"id"` field is **not** your API key — it's a
+   separate value SignWell uses to sign webhook events so we can verify
+   they're genuine. Set it as `SIGNWELL_WEBHOOK_ID` in Vercel.
+3. Run `supabase/schema_signature_requests_signwell.sql` once in the
+   Supabase SQL Editor (renames the ID column — see above).
+4. Leave `SIGNWELL_MODE=test` until you're ready for real, legally
+   binding signature requests, then switch it to `live`.
+5. The old `DROPBOX_SIGN_*` and `NEXT_PUBLIC_DROPBOX_SIGN_CLIENT_ID`
+   env vars in Vercel are no longer used and can be deleted whenever's
+   convenient — leaving them doesn't hurt anything.
+
 ## Roadmap
 
 - [x] Milestone 1 — login, dashboard, secure document upload/download
-- [x] Milestone 2 — e-signature via Dropbox Sign
+- [x] Milestone 2 — e-signature (originally Dropbox Sign, see Milestone 10 — now SignWell)
 - [x] Milestone 3 — invoicing and payment via Square
 - [x] Milestone 4 — tax organizer questionnaire
 - [x] Milestone 5 — security review (see above — code-level only, not a professional audit)
 - [x] A real "create invoice" UI for staff, instead of inserting rows by hand
 - [x] A staff-facing view of submitted tax organizer responses
-- [x] Milestone 6 — accounts/approval, invites, business organizer, needs-attention flag, personalized Dropbox Sign
+- [x] Milestone 6 — accounts/approval, invites, business organizer, needs-attention flag, personalized signer name
 - [x] Milestone 7 — CAPTCHA on sign-in, replacing manual account approval
 - [x] Milestone 8 — staff-initiated signature requests, staff email notifications on submit/upload
-- [x] Milestone 9 — interactive signature field placement (Embedded Requesting), email branding fix
+- [x] Milestone 9 — interactive signature field placement via Dropbox Sign (superseded by Milestone 10)
+- [x] Milestone 10 — switched e-signature provider to SignWell (cheaper, includes field placement at every tier)
 - [ ] "Get started" button on the main site links here
 
 ## A note on security

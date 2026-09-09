@@ -1,26 +1,21 @@
 import { NextResponse } from "next/server";
-import * as DropboxSign from "@dropbox/sign";
+import { Configuration, Embedded, Errors } from "@signwell/node-sdk";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isStaffEmail } from "@/lib/staff";
-import fs from "fs";
-import os from "os";
-import path from "path";
-import crypto from "crypto";
 
 // Staff-only: uploads a document to a specific client's Storage folder,
-// then creates a Dropbox Sign "unclaimed draft" (Embedded Requesting) for
-// it and hands back a claim_url. The staff member's browser opens that
-// claim_url in Dropbox Sign's embedded editor, where they drag a
-// signature/date field onto the document themselves before it actually
-// sends — the plain signatureRequestSend API has no such editor, which is
-// why nothing used to show up for field placement.
+// then creates a SignWell document in "draft" mode (Embedded Requesting)
+// and hands back an embedded_edit_url. The staff member's browser opens
+// that URL in SignWell's embedded editor, where they drag a signature/
+// date field onto the document themselves before clicking "Continue" —
+// that click is what actually sends it to the client.
 //
-// Because the request isn't actually created until the staff member
-// finishes in that editor, we do NOT insert into signature_requests here
-// — there's no dropbox_sign_request_id yet. That row gets created by the
-// webhook when Dropbox Sign fires signature_request_sent (see
-// src/app/api/sign/webhook/route.ts).
+// Unlike our previous Dropbox Sign integration, SignWell gives us a real
+// document ID immediately (even while still a draft), so we record the
+// signature_requests row here rather than waiting on a webhook. The
+// webhook (src/app/api/sign/webhook/route.ts) only needs to update the
+// row's status afterward (sent, signed).
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -80,96 +75,75 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: uploadError.message }, { status: 500 });
   }
 
-  // Random temp filename, not derived from the uploaded filename — same
-  // belt-and-suspenders reasoning as before.
-  const tmpPath = path.join(os.tmpdir(), crypto.randomUUID());
-  fs.writeFileSync(tmpPath, fileBuffer);
-  const fileStream = fs.createReadStream(tmpPath);
-
   const { data: profile } = await admin
     .from("profiles")
-    .select("name")
+    .select("name, first_name, last_name")
     .eq("user_id", clientUserId)
     .maybeSingle();
   const signerName = profile?.name || targetUser.email;
 
-  const isLive = process.env.DROPBOX_SIGN_MODE === "live";
-  const apiKey = isLive
-    ? process.env.DROPBOX_SIGN_LIVE_KEY
-    : process.env.DROPBOX_SIGN_TEST_KEY;
-  const clientId = process.env.NEXT_PUBLIC_DROPBOX_SIGN_CLIENT_ID;
+  const isLive = process.env.SIGNWELL_MODE === "live";
+  const apiKey = process.env.SIGNWELL_API_KEY;
 
-  if (!clientId) {
-    fs.unlink(tmpPath, () => {});
+  if (!apiKey) {
     return NextResponse.json(
-      { error: "NEXT_PUBLIC_DROPBOX_SIGN_CLIENT_ID is not configured on the server" },
+      { error: "SIGNWELL_API_KEY is not configured on the server" },
       { status: 500 }
     );
   }
 
-  const unclaimedDraftApi = new DropboxSign.UnclaimedDraftApi();
-  unclaimedDraftApi.username = apiKey!;
+  const configuration = new Configuration({ apiKey });
 
-  const draftRequest: DropboxSign.UnclaimedDraftCreateEmbeddedRequest = {
-    clientId,
-    requesterEmailAddress: staffUser.email,
-    // There's no separate "title" field on an unclaimed draft (unlike
-    // signatureRequestSend) — Dropbox Sign uses the uploaded file's own
-    // name as the resulting request's title, which is what the webhook
-    // handler and staff list below key off of.
-    subject: `Please sign: ${file.name}`,
-    message: "JLB Tax & Bookkeeping has sent you a document to review and sign.",
-    signers: [
-      {
-        emailAddress: targetUser.email,
-        name: signerName,
-      },
-    ],
-    files: [fileStream],
-    testMode: !isLive,
-    // Staff already picked the client and file on our own page — no need
-    // to let the embedded editor offer to change either.
-    forceSignerPage: false,
-  };
-
-  let response;
+  let document;
   try {
-    response = await unclaimedDraftApi.unclaimedDraftCreateEmbedded(draftRequest);
+    document = await Embedded.createRequestingDocument(
+      {
+        name: file.name,
+        test_mode: !isLive,
+        files: [{ name: file.name, file_base64: fileBuffer.toString("base64") }],
+        recipients: [{ id: "1", name: signerName, email: targetUser.email }],
+        subject: `Please sign: ${file.name}`,
+        message: "JLB Tax & Bookkeeping has sent you a document to review and sign.",
+        custom_requester_name: "JLB Tax & Bookkeeping",
+        custom_requester_email: staffUser.email,
+      },
+      { configuration }
+    );
   } catch (err) {
-    // @dropbox/sign wraps every failed HTTP call in a generic HttpError
-    // whose .message is always literally "HTTP request failed" — the
-    // actual reason (bad API key, plan doesn't allow live API sends,
-    // domain not verified, etc.) is on .body.error.error_msg instead.
-    // Log the full thing server-side and surface the real message to
-    // the client instead of the useless generic one.
-    const httpError = err as {
-      message?: string;
-      statusCode?: number;
-      body?: { error?: { errorMsg?: string; errorName?: string } };
-    };
+    // SignWell's SDK throws a proper ApiError with a real .body/.message —
+    // unlike Dropbox Sign's generic wrapper, this should already be
+    // diagnosable, but log it server-side too just in case.
+    const apiError = err instanceof Errors.ApiError ? err : null;
     console.error(
-      "Dropbox Sign unclaimedDraftCreateEmbedded failed:",
-      httpError.statusCode,
-      JSON.stringify(httpError.body)
+      "SignWell createRequestingDocument failed:",
+      apiError?.code,
+      JSON.stringify(apiError?.body ?? err)
     );
     const message =
-      httpError.body?.error?.errorMsg ||
-      httpError.body?.error?.errorName ||
-      httpError.message ||
-      "Dropbox Sign error";
+      (apiError?.body as { message?: string } | undefined)?.message ||
+      apiError?.message ||
+      (err instanceof Error ? err.message : "SignWell error");
     return NextResponse.json({ error: message }, { status: 502 });
-  } finally {
-    fs.unlink(tmpPath, () => {});
   }
 
-  const claimUrl = response.body.unclaimedDraft?.claimUrl;
-
-  if (!claimUrl) {
+  const embeddedEditUrl = document.embedded_edit_url;
+  if (!embeddedEditUrl) {
     return NextResponse.json(
-      { error: "Dropbox Sign did not return a claim URL" },
+      { error: "SignWell did not return an editor link" },
       { status: 502 }
     );
   }
 
-  return NextResponse.json({ claimUrl });
+  const { error: insertError } = await admin.from("signature_requests").insert({
+    user_id: clientUserId,
+    document_name: file.name,
+    external_request_id: document.id,
+    status: "draft",
+  });
+
+  if (insertError) {
+    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ embeddedEditUrl });
 }
