@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { sendStaffNotification } from "@/lib/mail";
 
 // Same pattern as /api/documents/upload, for the business organizer's
@@ -35,6 +36,18 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Tagged as a client upload same as any other document — the staff
+  // per-client documents list additionally excludes P&L files by name
+  // (they already get their own line item in the business organizer
+  // section), so this is mostly for completeness/consistency.
+  const admin = createAdminClient();
+  await admin.from("documents").insert({
+    user_id: user.id,
+    file_name: storedName,
+    original_name: file.name,
+    uploaded_by: "client",
+  });
 
   const { data: profile } = await supabase
     .from("profiles")

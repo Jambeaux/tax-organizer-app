@@ -1,14 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { clientLabel } from "@/lib/clientLabel";
-
-type Client = {
-  id: string;
-  email: string | null;
-  first_name: string | null;
-  last_name: string | null;
-};
 
 type SignatureRequestRow = {
   id: string;
@@ -48,11 +40,14 @@ function loadSignWellScript(): Promise<void> {
   return signWellScriptPromise;
 }
 
-export default function StaffSignatureRequests() {
-  const [clients, setClients] = useState<Client[]>([]);
+// Sends a document for signature to, and lists signature requests for,
+// one client. Reuses the existing (all-clients)
+// /api/staff/signature-requests route and filters client-side to this
+// one user — the client is fixed by the page this is embedded in, so
+// there's no client picker here.
+export default function StaffSignatureRequests({ clientId }: { clientId: string }) {
   const [requests, setRequests] = useState<SignatureRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [clientId, setClientId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
   const [preparingFields, setPreparingFields] = useState(false);
@@ -60,27 +55,24 @@ export default function StaffSignatureRequests() {
 
   async function loadAll() {
     setLoading(true);
-    const [clientsRes, requestsRes] = await Promise.all([
-      fetch("/api/staff/clients"),
-      fetch("/api/staff/signature-requests"),
-    ]);
-    const clientsBody = await clientsRes.json().catch(() => ({}));
-    const requestsBody = await requestsRes.json().catch(() => ({}));
-    setClients(clientsBody.clients ?? []);
-    setRequests(requestsBody.signatureRequests ?? []);
+    const res = await fetch("/api/staff/signature-requests");
+    const body = await res.json().catch(() => ({}));
+    const all: SignatureRequestRow[] = body.signatureRequests ?? [];
+    setRequests(all.filter((r) => r.user_id === clientId));
     setLoading(false);
   }
 
   useEffect(() => {
     loadAll();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!clientId || !file) {
-      setError("Pick a client and choose a document to send.");
+    if (!file) {
+      setError("Choose a document to send.");
       return;
     }
 
@@ -131,7 +123,6 @@ export default function StaffSignatureRequests() {
       events: {
         completed: () => {
           setPreparingFields(false);
-          setClientId("");
           setFile(null);
           // The signature_requests row already exists (created
           // synchronously when we asked SignWell for this editor link),
@@ -166,18 +157,6 @@ export default function StaffSignatureRequests() {
 
         <form onSubmit={handleSend}>
           <div className="field-group">
-            <label className="field-label">Client</label>
-            <select value={clientId} onChange={(e) => setClientId(e.target.value)}>
-              <option value="">Select a client</option>
-              {clients.map((c) => (
-                <option value={c.id} key={c.id}>
-                  {clientLabel({ firstName: c.first_name, lastName: c.last_name, email: c.email }) || c.id}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="field-group">
             <label className="field-label">Document</label>
             <input
               type="file"
@@ -203,14 +182,7 @@ export default function StaffSignatureRequests() {
         ) : (
           requests.map((r) => (
             <div className="doc-row" key={r.id}>
-              <span>
-                {clientLabel({
-                  firstName: r.client_first_name,
-                  lastName: r.client_last_name,
-                  email: r.client_email,
-                })}{" "}
-                — {r.document_name}
-              </span>
+              <span>{r.document_name}</span>
               <span
                 style={{
                   fontSize: "0.75rem",

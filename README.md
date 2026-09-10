@@ -556,6 +556,50 @@ HIPAA compliant, no monthly minimum.
    env vars in Vercel are no longer used and can be deleted whenever's
    convenient — leaving them doesn't hurt anything.
 
+## Milestone 11 — per-client staff view, and sending plain documents to clients
+
+Before this milestone, `/staff` showed every client's tax organizer,
+invoices, and signature requests all mixed together in four separate
+flat lists — finding everything about one client meant scrolling through
+all four looking for their rows. There was also no way for staff to send
+a client a document that doesn't need a signature (a receipt, a copy of
+their return, a letter) without misusing the signature-request flow.
+
+**What's new:**
+
+- **A dedicated page per client** at `/staff/clients/[id]`. Clicking any
+  row in the "All clients" list on `/staff` now takes you to a page
+  scoped to just that client: their tax organizer, business tax
+  organizer, invoices, signature requests, and documents, all in one
+  place. `/staff` itself is now just the accounts/invites list.
+- **Staff can send a client a plain document.** A new "Send a document
+  (no signature required)" card on each client's page uploads one or
+  more files straight into that client's Documents area and emails them
+  to let them know (reusing the existing SMTP setup from Milestone 8),
+  with an optional note included in the email. This is separate from
+  "Send a document for signature" — use that one instead when the
+  document actually needs to be signed.
+- **Documents are now tracked by who uploaded them.** A new `documents`
+  table (`supabase/schema_documents.sql`) records, for every plain
+  upload, whether it came from the client or from staff — something
+  Storage alone never tracked. The client's page shows two lists,
+  "Sent from firm" and "Uploaded by client." P&L statements and
+  signature-request documents already have their own sections and are
+  excluded from these two lists so nothing shows up twice.
+- The existing `GET /api/staff/documents?userId=X&fileName=Y` signed-URL
+  download route is unchanged; it now also supports `?userId=X` alone
+  (no `fileName`) to list a client's plain documents.
+- The client-facing document delete button now goes through a new
+  `POST /api/documents/delete` route (previously deleted straight from
+  Storage in the browser) so the matching `documents` row gets cleaned
+  up too, not just the file.
+
+**Setup:**
+
+1. Run `supabase/schema_documents.sql` once in the Supabase SQL Editor.
+2. No new environment variables or webhooks — client notification
+   emails reuse the same `SMTP_*` settings from Milestone 8.
+
 ## Roadmap
 
 - [x] Milestone 1 — login, dashboard, secure document upload/download
@@ -570,6 +614,7 @@ HIPAA compliant, no monthly minimum.
 - [x] Milestone 8 — staff-initiated signature requests, staff email notifications on submit/upload
 - [x] Milestone 9 — interactive signature field placement via Dropbox Sign (superseded by Milestone 10)
 - [x] Milestone 10 — switched e-signature provider to SignWell (cheaper, includes field placement at every tier)
+- [x] Milestone 11 — per-client staff view, sending plain documents to clients
 - [ ] "Get started" button on the main site links here
 
 ## A note on security

@@ -76,3 +76,37 @@ export async function sendStaffNotification({
     console.error("Failed to send staff notification email:", error);
   }
 }
+
+// Emails a single client — used when staff sends them a plain (non-
+// signature) document, so they know to log in and check their Documents
+// area. Same fail-quiet behavior as sendStaffNotification: a missing SMTP
+// config or delivery failure should never block the staff action that
+// triggered it.
+export async function sendClientNotification({
+  to,
+  subject,
+  text,
+}: {
+  to: string;
+  subject: string;
+  text: string;
+}): Promise<void> {
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.error("Client notification email skipped: SMTP_* env vars are not configured.");
+    return;
+  }
+
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+
+  try {
+    await transporter.sendMail({
+      from,
+      to,
+      subject,
+      text,
+    });
+  } catch (error) {
+    console.error("Failed to send client notification email:", error);
+  }
+}

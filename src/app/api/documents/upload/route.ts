@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { sendStaffNotification } from "@/lib/mail";
 
 // Runs the client's own document upload server-side (still the
@@ -36,6 +37,17 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Record who uploaded this so the staff per-client view can tell it
+  // apart from documents the firm sent. Uses the admin client since this
+  // route has already authenticated the user itself.
+  const admin = createAdminClient();
+  await admin.from("documents").insert({
+    user_id: user.id,
+    file_name: storedName,
+    original_name: file.name,
+    uploaded_by: "client",
+  });
 
   const { data: profile } = await supabase
     .from("profiles")

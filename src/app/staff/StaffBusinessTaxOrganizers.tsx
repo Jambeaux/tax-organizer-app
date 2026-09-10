@@ -6,7 +6,6 @@ import {
   VEHICLE_EXPENSE_ITEMS,
   type BusinessResponses,
 } from "@/app/dashboard/BusinessTaxOrganizer";
-import { clientLabel } from "@/lib/clientLabel";
 
 type OrganizerRow = {
   id: string;
@@ -43,100 +42,79 @@ function formatMoney(n: number): string {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export default function StaffBusinessTaxOrganizers() {
-  const [organizers, setOrganizers] = useState<OrganizerRow[]>([]);
+// Shows one client's business tax organizer. Reuses the existing
+// (all-clients) /api/staff/business-tax-organizers route and filters
+// client-side to this one user, rather than adding a query-param mode to
+// that route.
+export default function StaffBusinessTaxOrganizers({ clientId }: { clientId: string }) {
+  const [organizer, setOrganizer] = useState<OrganizerRow | null>(null);
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     async function load() {
       setLoading(true);
       const res = await fetch("/api/staff/business-tax-organizers");
       const body = await res.json().catch(() => ({}));
-      setOrganizers(body.organizers ?? []);
+      if (cancelled) return;
+      const organizers: OrganizerRow[] = body.organizers ?? [];
+      setOrganizer(organizers.find((o) => o.user_id === clientId) ?? null);
       setLoading(false);
     }
     load();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId]);
 
   if (loading) {
     return <p style={{ fontSize: "0.9rem", color: "#5f5e5a" }}>Loading...</p>;
   }
 
   return (
-    <div className="card" style={{ marginTop: "1.25rem" }}>
-      <p className="section-title">Business tax organizer responses</p>
+    <div className="card">
+      <p className="section-title">Business tax organizer</p>
 
-      {organizers.length === 0 ? (
+      {!organizer ? (
         <p style={{ fontSize: "0.9rem", color: "#5f5e5a" }}>
-          No clients have started a business tax organizer yet.
+          This client hasn&apos;t started a business tax organizer yet.
         </p>
       ) : (
-        organizers.map((org) => (
-          <div key={org.id} style={{ borderBottom: "1px solid var(--gray)" }}>
-            <div
-              className="doc-row"
-              style={{ cursor: "pointer", borderBottom: "none" }}
-              onClick={() => setExpandedId(expandedId === org.id ? null : org.id)}
+        <div style={{ fontSize: "0.85rem" }}>
+          <div
+            className="doc-row"
+            style={{ borderBottom: "none", paddingBottom: "0.5rem" }}
+          >
+            <span>Last updated {new Date(organizer.updated_at).toLocaleDateString()}</span>
+            <span
+              style={{
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                color: organizer.status === "submitted" ? "#047E20" : "#cc9900",
+                textTransform: "capitalize",
+              }}
             >
-              <span>
-                {clientLabel({
-                  firstName: org.client_first_name,
-                  lastName: org.client_last_name,
-                  email: org.client_email,
-                })}
-                {" — last updated "}
-                {new Date(org.updated_at).toLocaleDateString()}
-              </span>
-              <span style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                {org.needs_attention && (
-                  <span
-                    style={{
-                      fontSize: "0.7rem",
-                      fontWeight: 700,
-                      color: "#a32d2d",
-                      border: "1px solid #a32d2d",
-                      borderRadius: "4px",
-                      padding: "0.1rem 0.4rem",
-                    }}
-                  >
-                    Needs attention
-                  </span>
-                )}
-                <span
-                  style={{
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    color: org.status === "submitted" ? "#047E20" : "#cc9900",
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {org.status === "submitted" ? "Submitted" : "Draft"}
-                </span>
-              </span>
-            </div>
-
-            {expandedId === org.id && (
-              <div style={{ padding: "0 0 1rem 0", fontSize: "0.85rem" }}>
-                {org.needs_attention && (
-                  <div
-                    style={{
-                      background: "#fdf1f1",
-                      border: "1px solid #a32d2d",
-                      borderRadius: "6px",
-                      padding: "0.6rem",
-                      marginBottom: "0.75rem",
-                    }}
-                  >
-                    <strong>Client flagged this as needing extra attention.</strong>
-                    {org.attention_notes && <div>{org.attention_notes}</div>}
-                  </div>
-                )}
-                <BusinessOrganizerDetail responses={org.responses} userId={org.user_id} />
-              </div>
-            )}
+              {organizer.status === "submitted" ? "Submitted" : "Draft"}
+            </span>
           </div>
-        ))
+
+          {organizer.needs_attention && (
+            <div
+              style={{
+                background: "#fdf1f1",
+                border: "1px solid #a32d2d",
+                borderRadius: "6px",
+                padding: "0.6rem",
+                marginBottom: "0.75rem",
+              }}
+            >
+              <strong>Client flagged this as needing extra attention.</strong>
+              {organizer.attention_notes && <div>{organizer.attention_notes}</div>}
+            </div>
+          )}
+
+          <BusinessOrganizerDetail responses={organizer.responses} userId={organizer.user_id} />
+        </div>
       )}
     </div>
   );
@@ -151,7 +129,7 @@ function Field({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
-function BusinessOrganizerDetail({
+export function BusinessOrganizerDetail({
   responses,
   userId,
 }: {

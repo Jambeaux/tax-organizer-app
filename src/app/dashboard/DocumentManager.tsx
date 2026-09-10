@@ -72,12 +72,15 @@ export default function DocumentManager({ userId }: { userId: string }) {
   }
 
   async function handleDelete(name: string) {
-    const { error } = await supabase.storage
-      .from("documents")
-      .remove([`${userId}/${name}`]);
+    const res = await fetch("/api/documents/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fileName: name }),
+    });
 
-    if (error) {
-      setError(error.message);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error || "Delete failed");
     } else {
       loadFiles();
     }

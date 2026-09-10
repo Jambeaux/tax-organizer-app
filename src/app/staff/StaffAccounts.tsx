@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { clientLabel } from "@/lib/clientLabel";
 
 type Client = {
@@ -259,13 +260,22 @@ export default function StaffAccounts() {
 
       <div className="card" style={{ marginBottom: "1.25rem" }}>
         <p className="section-title">All clients ({clients.length})</p>
+        <p style={{ fontSize: "0.85rem", color: "#5f5e5a", marginTop: 0 }}>
+          Click a client to view their tax organizer, invoices, signature
+          documents, and files.
+        </p>
         {clients.length === 0 ? (
           <p style={{ fontSize: "0.9rem", color: "#5f5e5a" }}>
             No clients signed up yet.
           </p>
         ) : (
           clients.map((c) => (
-            <div className="doc-row" key={c.id}>
+            <Link
+              href={`/staff/clients/${c.id}`}
+              className="doc-row"
+              style={{ textDecoration: "none", color: "inherit" }}
+              key={c.id}
+            >
               <span>
                 {clientLabel({ firstName: c.first_name, lastName: c.last_name, email: c.email })}
                 {c.is_business ? " (business/self-employed)" : ""}
@@ -280,7 +290,7 @@ export default function StaffAccounts() {
               >
                 {c.status}
               </span>
-            </div>
+            </Link>
           ))
         )}
       </div>

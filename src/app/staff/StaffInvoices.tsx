@@ -1,14 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { clientLabel } from "@/lib/clientLabel";
 
-type Client = {
-  id: string;
-  email: string | null;
-  first_name: string | null;
-  last_name: string | null;
-};
 type Invoice = {
   id: string;
   user_id: string;
@@ -21,11 +14,13 @@ type Invoice = {
   client_last_name: string | null;
 };
 
-export default function StaffInvoices() {
-  const [clients, setClients] = useState<Client[]>([]);
+// Shows and creates invoices for one client. Reuses the existing
+// (all-clients) /api/staff/invoices route and filters client-side to
+// this one user — the client is fixed by the page this is embedded in,
+// so there's no client picker here.
+export default function StaffInvoices({ clientId }: { clientId: string }) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [clientId, setClientId] = useState("");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [creating, setCreating] = useState(false);
@@ -33,28 +28,25 @@ export default function StaffInvoices() {
 
   async function loadAll() {
     setLoading(true);
-    const [clientsRes, invoicesRes] = await Promise.all([
-      fetch("/api/staff/clients"),
-      fetch("/api/staff/invoices"),
-    ]);
-    const clientsBody = await clientsRes.json().catch(() => ({}));
-    const invoicesBody = await invoicesRes.json().catch(() => ({}));
-    setClients(clientsBody.clients ?? []);
-    setInvoices(invoicesBody.invoices ?? []);
+    const res = await fetch("/api/staff/invoices");
+    const body = await res.json().catch(() => ({}));
+    const all: Invoice[] = body.invoices ?? [];
+    setInvoices(all.filter((inv) => inv.user_id === clientId));
     setLoading(false);
   }
 
   useEffect(() => {
     loadAll();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
     const dollars = parseFloat(amount);
-    if (!clientId || !description.trim() || !dollars || dollars <= 0) {
-      setError("Pick a client, enter a description, and a positive dollar amount.");
+    if (!description.trim() || !dollars || dollars <= 0) {
+      setError("Enter a description and a positive dollar amount.");
       return;
     }
 
@@ -94,18 +86,6 @@ export default function StaffInvoices() {
 
         <form onSubmit={handleCreate}>
           <div className="field-group">
-            <label className="field-label">Client</label>
-            <select value={clientId} onChange={(e) => setClientId(e.target.value)}>
-              <option value="">Select a client</option>
-              {clients.map((c) => (
-                <option value={c.id} key={c.id}>
-                  {clientLabel({ firstName: c.first_name, lastName: c.last_name, email: c.email }) || c.id}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="field-group">
             <label className="field-label">Description</label>
             <input
               type="text"
@@ -133,7 +113,7 @@ export default function StaffInvoices() {
       </div>
 
       <div className="card">
-        <p className="section-title">All invoices</p>
+        <p className="section-title">Invoices</p>
 
         {invoices.length === 0 ? (
           <p style={{ fontSize: "0.9rem", color: "#5f5e5a" }}>No invoices yet.</p>
@@ -141,13 +121,7 @@ export default function StaffInvoices() {
           invoices.map((inv) => (
             <div className="doc-row" key={inv.id}>
               <span>
-                {clientLabel({
-                  firstName: inv.client_first_name,
-                  lastName: inv.client_last_name,
-                  email: inv.client_email,
-                })}{" "}
-                — {inv.description} — $
-                {(inv.amount_cents / 100).toFixed(2)}
+                {inv.description} — ${(inv.amount_cents / 100).toFixed(2)}
               </span>
               <span
                 style={{
