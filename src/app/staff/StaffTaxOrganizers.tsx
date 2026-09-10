@@ -113,8 +113,20 @@ export function OrganizerDetail({ responses }: { responses: Responses }) {
   const checkedDeductions = DEDUCTION_FIELDS.filter((f) => responses.deductions?.[f.key]);
   const checkedLifeChanges = LIFE_CHANGE_FIELDS.filter((f) => responses.lifeChanges?.[f.key]);
 
+  const fullName = [responses.firstName, responses.lastName].filter(Boolean).join(" ");
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <div>
+        <strong>Name:</strong> {fullName || "Not answered"}
+      </div>
+
+      {responses.address && (
+        <div>
+          <strong>Address:</strong> {responses.address}
+        </div>
+      )}
+
       <div>
         <strong>Filing status:</strong>{" "}
         {FILING_STATUS_LABELS[responses.filingStatus] || "Not answered"}
