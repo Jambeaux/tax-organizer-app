@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendStaffNotification } from "@/lib/mail";
+import { sanitizeFileName } from "@/lib/sanitizeFileName";
 
 // Same pattern as /api/documents/upload, for the business organizer's
 // profit & loss statement upload — a second entry point into the same
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A file is required" }, { status: 400 });
   }
 
-  const storedName = `${Date.now()}_PL_${file.name}`;
+  const storedName = `${Date.now()}_PL_${sanitizeFileName(file.name)}`;
   const fileBuffer = Buffer.from(await file.arrayBuffer());
 
   const { error } = await supabase.storage

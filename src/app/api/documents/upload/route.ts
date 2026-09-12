@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendStaffNotification } from "@/lib/mail";
+import { sanitizeFileName } from "@/lib/sanitizeFileName";
 
 // Runs the client's own document upload server-side (still the
 // request-scoped, RLS-bound client — a client can only ever write into
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A file is required" }, { status: 400 });
   }
 
-  const storedName = `${Date.now()}_${file.name}`;
+  const storedName = `${Date.now()}_${sanitizeFileName(file.name)}`;
   const fileBuffer = Buffer.from(await file.arrayBuffer());
 
   const { error } = await supabase.storage

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isStaffEmail } from "@/lib/staff";
 import { sendClientNotification } from "@/lib/mail";
+import { sanitizeFileName } from "@/lib/sanitizeFileName";
 
 // Staff-only: uploads one or more plain (non-signature) documents to a
 // specific client's Storage folder, tags each with a `documents` row
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
   const sentFileNames: string[] = [];
 
   for (const file of files) {
-    const storedName = `${Date.now()}_${file.name}`;
+    const storedName = `${Date.now()}_${sanitizeFileName(file.name)}`;
     const fileBuffer = Buffer.from(await file.arrayBuffer());
 
     const { error: uploadError } = await admin.storage

@@ -3,6 +3,7 @@ import { Configuration, Embedded, Errors } from "@signwell/node-sdk";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isStaffEmail } from "@/lib/staff";
+import { sanitizeFileName } from "@/lib/sanitizeFileName";
 
 // Staff-only: uploads a document to a specific client's Storage folder,
 // then creates a SignWell document in "draft" mode (Embedded Requesting)
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "This client has no email on file" }, { status: 400 });
   }
 
-  const storedName = `${Date.now()}_${file.name}`;
+  const storedName = `${Date.now()}_${sanitizeFileName(file.name)}`;
   const fileBuffer = Buffer.from(await file.arrayBuffer());
 
   const { error: uploadError } = await admin.storage
